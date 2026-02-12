@@ -2499,22 +2499,32 @@ svg#main-viz {
       .attr('text-anchor', 'middle')
       .text(d => d.label);
 
-    // Tool badge — positioned below name
+    // Tool badge — show currentAction for detail (e.g. "Read: STATE.md")
+    const badgeText = d => {
+      if (d.currentAction && d.currentAction.length > 1) return d.currentAction;
+      if (d.currentTool) return d.currentTool + '()';
+      return '';
+    };
+    const badgeLen = d => Math.min(30, (badgeText(d) || '').length);
+
     merged.select('.agent-tool-bg')
-      .attr('x', d => -(Math.min(60, (d.currentTool || '').length * 4 + 16)))
+      .attr('x', d => -(Math.min(90, badgeLen(d) * 3.5 + 8)))
       .attr('y', d => d.nodeRadius + 26)
-      .attr('width', d => Math.min(120, (d.currentTool || '').length * 8 + 32))
+      .attr('width', d => Math.min(180, badgeLen(d) * 7 + 16))
       .attr('height', 16)
       .attr('rx', 4)
-      .attr('fill', d => d.currentTool ? 'rgba(34,211,238,0.1)' : 'none')
-      .attr('stroke', d => d.currentTool ? 'rgba(34,211,238,0.25)' : 'none')
+      .attr('fill', d => badgeText(d) ? 'rgba(34,211,238,0.1)' : 'none')
+      .attr('stroke', d => badgeText(d) ? 'rgba(34,211,238,0.25)' : 'none')
       .attr('stroke-width', 0.5);
 
     merged.select('.agent-node-tool-badge')
       .attr('y', d => d.nodeRadius + 38)
       .attr('fill', 'var(--accent-cyan)')
       .attr('font-size', 10)
-      .text(d => d.currentTool ? d.currentTool + '()' : '');
+      .text(d => {
+        const t = badgeText(d);
+        return t.length > 28 ? t.slice(0, 26) + '...' : t;
+      });
 
     nodeGroups.exit().transition().duration(500).attr('opacity', 0).remove();
 
@@ -2700,9 +2710,10 @@ svg#main-viz {
           <span class="agent-card-name">${escapeHtml(agent.label)}</span>
           <span class="agent-card-status">${escapeHtml(agent.status)}</span>
         </div>
-        <div class="agent-card-action">${escapeHtml(agent.currentTool ? agent.currentTool + ' → ' : '')}${escapeHtml(agent.currentAction || 'Idle')}</div>
-        <div class="agent-card-tokens">${agent.tokens ? Math.round(agent.tokens.total / 1000) + 'K tokens' : '--'}</div>
+        <div class="agent-card-action">${escapeHtml(agent.currentAction || 'Idle')}</div>
+        <div class="agent-card-tokens">${agent.tokens ? Math.round(agent.tokens.total / 1000) + 'K tokens' : '--'}${agent.model ? ' · ' + escapeHtml(agent.model.replace('claude-', '').replace('-20251001', '')) : ''}</div>
         <div class="agent-card-bar"><div class="agent-card-fill" style="width:${tokenPct}%;background:${color.base}"></div></div>
+        ${(agent.recentTools && agent.recentTools.length > 1) ? '<div class="agent-card-recent" style="margin-top:4px;font-size:10px;color:var(--text-muted);line-height:1.4;">' + agent.recentTools.slice(-5).map(t => '<div style="opacity:' + (t === agent.currentAction ? '1' : '0.5') + '">· ' + escapeHtml(t.length > 40 ? t.slice(0,38) + '...' : t) + '</div>').join('') + '</div>' : ''}
       `;
       container.appendChild(card);
     });

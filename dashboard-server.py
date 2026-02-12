@@ -250,12 +250,41 @@ def _tail_read(filepath, num_bytes=16384):
         return []
 
 
+def _describe_tool(tool_name, tool_input):
+    """Build a human-readable description for a tool call."""
+    if tool_name in ("Read", "Glob", "Grep"):
+        target = tool_input.get("file_path") or tool_input.get("pattern") or tool_input.get("path", "")
+        return f"{tool_name}: {os.path.basename(str(target))}" if target else f"{tool_name}()"
+    elif tool_name == "Edit":
+        fp = tool_input.get("file_path", "")
+        return f"Editing {os.path.basename(fp)}" if fp else "Editing file"
+    elif tool_name == "Write":
+        fp = tool_input.get("file_path", "")
+        return f"Writing {os.path.basename(fp)}" if fp else "Writing file"
+    elif tool_name == "Bash":
+        cmd = tool_input.get("command", "")
+        return f"Running: {cmd[:60]}" if cmd else "Running command"
+    elif tool_name == "Task":
+        desc = tool_input.get("description", "")
+        return f"Agent: {desc[:50]}" if desc else "Spawning agent"
+    elif tool_name == "WebSearch":
+        q = tool_input.get("query", "")
+        return f"Searching: {q[:50]}" if q else "Web search"
+    elif tool_name == "TodoWrite":
+        return "Updating task list"
+    elif tool_name == "Skill":
+        skill = tool_input.get("skill", "")
+        return f"Skill: {skill}" if skill else "Running skill"
+    return f"{tool_name}()"
+
+
 def _parse_session_tail(lines):
     """Parse tail of a session JSONL to extract current state."""
     result = {
         "currentTool": None,
         "currentAction": None,
         "lastUserMessage": None,
+        "recentTools": [],
         "tokens": {"input": 0, "output": 0, "total": 0},
         "model": None,
     }
@@ -296,33 +325,13 @@ def _parse_session_tail(lines):
                 if isinstance(block, dict) and block.get("type") == "tool_use":
                     tool_name = block.get("name", "")
                     tool_input = block.get("input", {})
+                    action = _describe_tool(tool_name, tool_input)
                     result["currentTool"] = tool_name
+                    result["currentAction"] = action
+                    result["recentTools"].append(action)
 
-                    if tool_name in ("Read", "Glob", "Grep"):
-                        target = tool_input.get("file_path") or tool_input.get("pattern") or tool_input.get("path", "")
-                        result["currentAction"] = f"{tool_name}: {os.path.basename(str(target))}" if target else f"{tool_name}()"
-                    elif tool_name == "Edit":
-                        fp = tool_input.get("file_path", "")
-                        result["currentAction"] = f"Editing {os.path.basename(fp)}" if fp else "Editing file"
-                    elif tool_name == "Write":
-                        fp = tool_input.get("file_path", "")
-                        result["currentAction"] = f"Writing {os.path.basename(fp)}" if fp else "Writing file"
-                    elif tool_name == "Bash":
-                        cmd = tool_input.get("command", "")
-                        result["currentAction"] = f"Running: {cmd[:60]}" if cmd else "Running command"
-                    elif tool_name == "Task":
-                        desc = tool_input.get("description", "")
-                        result["currentAction"] = f"Agent: {desc}" if desc else "Spawning agent"
-                    elif tool_name == "WebSearch":
-                        q = tool_input.get("query", "")
-                        result["currentAction"] = f"Searching: {q[:50]}" if q else "Web search"
-                    elif tool_name == "TodoWrite":
-                        result["currentAction"] = "Updating task list"
-                    elif tool_name == "Skill":
-                        skill = tool_input.get("skill", "")
-                        result["currentAction"] = f"Skill: {skill}" if skill else "Running skill"
-                    else:
-                        result["currentAction"] = f"{tool_name}()"
+    # Keep only last 8 tool calls
+    result["recentTools"] = result["recentTools"][-8:]
 
     return result
 
@@ -362,6 +371,7 @@ def scan_sessions():
                     "status": "active",
                     "currentTool": state["currentTool"],
                     "currentAction": state["currentAction"] or state.get("lastUserMessage") or "Working...",
+                    "recentTools": state["recentTools"],
                     "goalId": None,
                     "tokens": state["tokens"],
                     "model": state["model"],

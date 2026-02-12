@@ -13,6 +13,7 @@ Endpoints:
     GET /api/stream  → SSE event stream (persistent connection)
 """
 
+import glob
 import json
 import os
 import re
@@ -20,7 +21,7 @@ import subprocess
 import threading
 import time
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from queue import Queue, Empty
 from socketserver import ThreadingMixIn
@@ -51,6 +52,12 @@ GOAL_COLORS = [
 GIT_REFRESH_INTERVAL = 60
 FILE_POLL_INTERVAL = 2
 SSE_KEEPALIVE_INTERVAL = 15
+
+# Claude Code session scanning
+CLAUDE_DIR = "/home/claude-agent/.claude"
+CLAUDE_PROJECTS_DIR = os.path.join(CLAUDE_DIR, "projects")
+SESSION_ACTIVE_THRESHOLD = 60   # seconds — file modified within this = active
+SESSION_POLL_INTERVAL = 3
 
 # ── Shared state ─────────────────────────────────────────────────────────────
 
@@ -201,6 +208,204 @@ def parse_goals(path: str) -> list[dict]:
             color = GOAL_COLORS[len(goals) % len(GOAL_COLORS)]
             goals.append({"name": name, "color": color})
     return goals
+
+
+# ── Claude Code session scanning ────────────────────────────────────────────
+
+def _decode_project_path(encoded_name):
+    """Decode 'home-claude--agent-project' to a readable project name."""
+    prefixes = [
+        "home-claude--agent-project-",
+        "home-claude--agent-",
+    ]
+    name = encoded_name
+    for prefix in prefixes:
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+            break
+    return name.replace("-", " ").title()
+
+
+def _tail_read(filepath, num_bytes=16384):
+    """Read the last num_bytes of a file and return as lines."""
+    try:
+        size = os.path.getsize(filepath)
+        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+            if size > num_bytes:
+                f.seek(size - num_bytes)
+                f.readline()  # skip partial first line
+            return f.readlines()
+    except OSError:
+        return []
+
+
+def _parse_session_tail(lines):
+    """Parse tail of a session JSONL to extract current state."""
+    result = {
+        "currentTool": None,
+        "currentAction": None,
+        "lastUserMessage": None,
+        "tokens": {"input": 0, "output": 0, "total": 0},
+        "model": None,
+    }
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        entry_type = entry.get("type", "")
+
+        if entry_type == "user":
+            msg = entry.get("message", {})
+            for block in msg.get("content", []):
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text = block["text"]
+                    result["lastUserMessage"] = text[:120] + ("..." if len(text) > 120 else "")
+                    break
+                elif isinstance(block, str):
+                    result["lastUserMessage"] = block[:120]
+                    break
+
+        if entry_type == "assistant":
+            msg = entry.get("message", {})
+            usage = msg.get("usage", {})
+            if usage:
+                inp = usage.get("input_tokens", 0) + usage.get("cache_read_input_tokens", 0)
+                out = usage.get("output_tokens", 0)
+                result["tokens"] = {"input": inp, "output": out, "total": inp + out}
+            if msg.get("model"):
+                result["model"] = msg["model"]
+
+            for block in msg.get("content", []):
+                if isinstance(block, dict) and block.get("type") == "tool_use":
+                    tool_name = block.get("name", "")
+                    tool_input = block.get("input", {})
+                    result["currentTool"] = tool_name
+
+                    if tool_name in ("Read", "Glob", "Grep"):
+                        target = tool_input.get("file_path") or tool_input.get("pattern") or tool_input.get("path", "")
+                        result["currentAction"] = f"{tool_name}: {os.path.basename(str(target))}" if target else f"{tool_name}()"
+                    elif tool_name == "Edit":
+                        fp = tool_input.get("file_path", "")
+                        result["currentAction"] = f"Editing {os.path.basename(fp)}" if fp else "Editing file"
+                    elif tool_name == "Write":
+                        fp = tool_input.get("file_path", "")
+                        result["currentAction"] = f"Writing {os.path.basename(fp)}" if fp else "Writing file"
+                    elif tool_name == "Bash":
+                        cmd = tool_input.get("command", "")
+                        result["currentAction"] = f"Running: {cmd[:60]}" if cmd else "Running command"
+                    elif tool_name == "Task":
+                        desc = tool_input.get("description", "")
+                        result["currentAction"] = f"Agent: {desc}" if desc else "Spawning agent"
+                    elif tool_name == "WebSearch":
+                        q = tool_input.get("query", "")
+                        result["currentAction"] = f"Searching: {q[:50]}" if q else "Web search"
+                    elif tool_name == "TodoWrite":
+                        result["currentAction"] = "Updating task list"
+                    elif tool_name == "Skill":
+                        skill = tool_input.get("skill", "")
+                        result["currentAction"] = f"Skill: {skill}" if skill else "Running skill"
+                    else:
+                        result["currentAction"] = f"{tool_name}()"
+
+    return result
+
+
+def scan_sessions():
+    """Find all active Claude Code sessions on this machine."""
+    now = time.time()
+    agents = []
+
+    if not os.path.isdir(CLAUDE_PROJECTS_DIR):
+        return agents
+
+    for project_dir in os.listdir(CLAUDE_PROJECTS_DIR):
+        project_path = os.path.join(CLAUDE_PROJECTS_DIR, project_dir)
+        if not os.path.isdir(project_path):
+            continue
+
+        project_label = _decode_project_path(project_dir)
+
+        for jsonl_path in glob.glob(os.path.join(project_path, "*.jsonl")):
+            try:
+                mtime = os.path.getmtime(jsonl_path)
+            except OSError:
+                continue
+
+            if now - mtime > SESSION_ACTIVE_THRESHOLD:
+                continue
+
+            session_id = os.path.splitext(os.path.basename(jsonl_path))[0]
+            state = _parse_session_tail(_tail_read(jsonl_path))
+
+            agents.append({
+                "id": session_id,
+                "label": project_label,
+                "parent": None,
+                "status": "active",
+                "currentTool": state["currentTool"],
+                "currentAction": state["currentAction"] or state.get("lastUserMessage") or "Working...",
+                "goalId": None,
+                "tokens": state["tokens"],
+                "model": state["model"],
+                "x": 0, "y": 0, "nodeRadius": 28,
+            })
+
+            # Check for active subagents
+            sa_dir = os.path.join(project_path, session_id, "subagents")
+            if os.path.isdir(sa_dir):
+                for sa_file in glob.glob(os.path.join(sa_dir, "agent-*.jsonl")):
+                    try:
+                        sa_mtime = os.path.getmtime(sa_file)
+                    except OSError:
+                        continue
+                    if now - sa_mtime > SESSION_ACTIVE_THRESHOLD:
+                        continue
+
+                    sa_name = os.path.splitext(os.path.basename(sa_file))[0]
+                    sa_state = _parse_session_tail(_tail_read(sa_file, 8192))
+
+                    agents.append({
+                        "id": sa_name,
+                        "label": sa_state["currentTool"] or sa_name.replace("agent-", ""),
+                        "parent": session_id,
+                        "status": "active",
+                        "currentTool": sa_state["currentTool"],
+                        "currentAction": sa_state["currentAction"] or "Working...",
+                        "goalId": None,
+                        "tokens": sa_state["tokens"],
+                        "model": sa_state["model"],
+                        "x": 0, "y": 0, "nodeRadius": 16,
+                    })
+
+    return agents
+
+
+def session_poller():
+    """Continuously scan for active sessions and broadcast updates."""
+    prev_ids = set()
+    while True:
+        agents = scan_sessions()
+        cur_ids = {a["id"] for a in agents}
+
+        if agents or cur_ids != prev_ids:
+            broadcaster.broadcast("agent_tree", json.dumps({
+                "agents": agents, "phase": "execute",
+            }))
+            n = len([a for a in agents if a["parent"] is None])
+            broadcaster.broadcast("heartbeat", json.dumps({
+                "alive": True,
+                "last": datetime.now(timezone.utc).isoformat(),
+                "activeSessions": n,
+            }))
+            prev_ids = cur_ids
+
+        time.sleep(SESSION_POLL_INTERVAL)
 
 
 # ── File read helpers per event type ─────────────────────────────────────────
@@ -474,7 +679,7 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 def main():
     # Start background threads
-    for target in (file_watcher, git_poller, sse_keepalive):
+    for target in (file_watcher, git_poller, sse_keepalive, session_poller):
         t = threading.Thread(target=target, daemon=True)
         t.start()
 

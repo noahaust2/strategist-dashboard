@@ -2824,6 +2824,8 @@ svg#main-viz {
   // ----------------------------------------------------------
   // SSE Connection
   // ----------------------------------------------------------
+  // Configurable API base: ?api=http://localhost:3001 or defaults to same-origin
+  const API_BASE = new URLSearchParams(location.search).get('api') || '';
   let sseRetryDelay = 1000;
   let sseRetryMax = 30000;
   let eventSource = null;
@@ -2833,10 +2835,10 @@ svg#main-viz {
     const connText = document.getElementById('conn-text');
 
     connDot.className = 'connecting';
-    connText.textContent = 'connecting';
+    connText.textContent = 'connecting' + (API_BASE ? ` to ${API_BASE}` : '');
 
     try {
-      eventSource = new EventSource('/api/stream');
+      eventSource = new EventSource(API_BASE + '/api/stream');
 
       eventSource.onopen = () => {
         sseRetryDelay = 1000;

@@ -573,8 +573,8 @@ svg#main-viz {
   position: fixed;
   bottom: 20px; left: 24px;
   z-index: 100;
-  width: 360px;
-  max-height: 320px;
+  width: 320px;
+  max-height: 240px;
   background: rgba(10, 10, 15, 0.78);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -722,7 +722,7 @@ svg#main-viz {
   text-anchor: middle;
 }
 
-.agent-link-line { stroke-width: 1.5; fill: none; }
+.agent-link-line { stroke-width: 2; fill: none; }
 .agent-data-particle { pointer-events: none; }
 
 /* Phase Indicator */
@@ -899,6 +899,259 @@ svg#main-viz {
   #hud-metrics { gap: 10px; }
   .hud-metric-value { font-size: 12px; }
   #activity-feed { width: calc(100vw - 48px); left: 12px; }
+  #mission-status { width: calc(100vw - 48px); left: 12px; }
+  #thinking-ticker { width: calc(100vw - 48px); right: 12px; }
+  .viz-label { display: none; }
+}
+
+/* Mission Status Panel — always visible, left side */
+#mission-status {
+  position: fixed;
+  top: 68px; left: 24px;
+  z-index: 100;
+  width: 320px;
+  background: rgba(10, 10, 15, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+
+#mission-phase-row {
+  display: flex; align-items: center; gap: 12px;
+}
+
+#mission-phase-badge {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  padding: 5px 14px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+#mission-phase-badge.read { background: rgba(34,211,238,0.15); color: var(--accent-cyan); box-shadow: 0 0 12px rgba(34,211,238,0.15); }
+#mission-phase-badge.decide { background: rgba(245,158,11,0.15); color: var(--accent-amber); box-shadow: 0 0 12px rgba(245,158,11,0.15); }
+#mission-phase-badge.execute { background: rgba(74,158,255,0.15); color: var(--accent-blue); box-shadow: 0 0 12px rgba(74,158,255,0.15); }
+#mission-phase-badge.verify { background: rgba(52,211,153,0.15); color: var(--accent-green); box-shadow: 0 0 12px rgba(52,211,153,0.15); }
+
+#mission-phase-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+#mission-task-section {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 12px;
+}
+
+#mission-goal-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  background: rgba(74,158,255,0.15);
+  color: var(--accent-blue);
+}
+
+#mission-task-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+
+#mission-task-detail {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+#mission-agents-row {
+  display: flex; align-items: center; gap: 8px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 10px;
+}
+
+.mission-agent-pip {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+}
+
+.mission-agent-pip.active {
+  animation: healthPulse 2s ease-in-out infinite;
+}
+
+#mission-agent-count {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+#mission-thinking {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 10px;
+}
+
+#mission-thinking-label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+#mission-thinking-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  max-height: 40px;
+  overflow: hidden;
+}
+
+#mission-thinking-time {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-top: 3px;
+}
+
+/* On-screen thinking ticker — right of mission status */
+#thinking-ticker {
+  position: fixed;
+  bottom: 20px; right: 24px;
+  z-index: 100;
+  width: 340px;
+  max-height: 200px;
+  background: rgba(10, 10, 15, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+#thinking-ticker-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  user-select: none;
+}
+
+.ticker-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+#thinking-ticker-entries {
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 6px 14px;
+}
+
+.ticker-entry {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 4px 0;
+  animation: feedSlideIn 0.3s ease-out;
+}
+
+.ticker-phase {
+  font-size: 8px; font-weight: 700;
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+  padding: 1px 5px; border-radius: 3px;
+  white-space: nowrap;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.ticker-phase.read { background: rgba(34,211,238,0.12); color: var(--accent-cyan); }
+.ticker-phase.decide { background: rgba(245,158,11,0.12); color: var(--accent-amber); }
+.ticker-phase.execute { background: rgba(74,158,255,0.12); color: var(--accent-blue); }
+.ticker-phase.verify { background: rgba(52,211,153,0.12); color: var(--accent-green); }
+
+.ticker-text {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.3;
+  flex: 1;
+}
+
+.ticker-time {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Visual labels for on-screen elements */
+.viz-label {
+  position: fixed;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 90;
+  font-family: var(--font-mono);
+}
+
+#label-architecture {
+  top: 68px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+#label-goals {
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* HUD phase indicator */
+#hud-phase {
+  display: flex; align-items: center; gap: 3px;
+  flex-shrink: 0;
+}
+
+.hud-phase-step {
+  width: 28px; height: 4px;
+  border-radius: 2px;
+  background: var(--bg-tertiary);
+  transition: all 0.3s;
+}
+
+.hud-phase-step.done { background: var(--accent-green); opacity: 0.7; }
+.hud-phase-step.active { background: var(--accent-blue); box-shadow: 0 0 6px rgba(74,158,255,0.4); }
+.hud-phase-step.pending { opacity: 0.3; }
+
+.hud-phase-label {
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+  color: var(--accent-blue);
+  margin-left: 6px;
+  white-space: nowrap;
 }
 
 /* Ambient background animation */
@@ -932,6 +1185,13 @@ svg#main-viz {
     <div class="hud-dot" id="hud-health-dot"></div>
     <span class="hud-status-text" id="hud-status-text">Initializing...</span>
   </div>
+  <div id="hud-phase">
+    <div class="hud-phase-step pending" data-phase="read"></div>
+    <div class="hud-phase-step pending" data-phase="decide"></div>
+    <div class="hud-phase-step pending" data-phase="execute"></div>
+    <div class="hud-phase-step pending" data-phase="verify"></div>
+    <span class="hud-phase-label" id="hud-phase-label">--</span>
+  </div>
   <div id="hud-context">
     <div class="context-bar">
       <div class="ctx-segment ctx-system" id="ctx-system"></div>
@@ -947,16 +1207,38 @@ svg#main-viz {
     <span class="hud-task-status" id="hud-task-status"></span>
   </div>
   <div id="hud-metrics">
-    <div class="hud-metric"><span class="hud-metric-value" id="hud-revenue">$0</span><span class="hud-metric-label">Rev</span></div>
-    <div class="hud-metric"><span class="hud-metric-value" id="hud-views">0</span><span class="hud-metric-label">Views</span></div>
     <div class="hud-metric"><span class="hud-metric-value" id="hud-tasks">0</span><span class="hud-metric-label">Tasks/wk</span></div>
-    <div class="hud-metric"><span class="hud-metric-value" id="hud-skills">0</span><span class="hud-metric-label">Skills</span></div>
     <div id="connection-status">
       <div id="conn-dot" class="connecting"></div>
       <span id="conn-text">connecting</span>
     </div>
   </div>
 </div>
+
+<!-- Mission Status Panel — always visible -->
+<div id="mission-status">
+  <div id="mission-phase-row">
+    <div id="mission-phase-badge" class="execute">EXECUTE</div>
+    <span id="mission-phase-label">Agent Loop Phase</span>
+  </div>
+  <div id="mission-task-section">
+    <div id="mission-goal-badge">Agent</div>
+    <div id="mission-task-name">Waiting for status...</div>
+    <div id="mission-task-detail"></div>
+  </div>
+  <div id="mission-agents-row">
+    <span id="mission-agent-count">0 agents</span>
+  </div>
+  <div id="mission-thinking">
+    <div id="mission-thinking-label">Latest Reasoning</div>
+    <div id="mission-thinking-text">No thinking data yet</div>
+    <div id="mission-thinking-time"></div>
+  </div>
+</div>
+
+<!-- Visual labels -->
+<div class="viz-label" id="label-architecture">Agent Architecture</div>
+<div class="viz-label" id="label-goals">Goal Clusters</div>
 
 <div id="zoom-indicator">1.0x</div>
 
@@ -978,37 +1260,26 @@ svg#main-viz {
   </div>
 </div>
 
+<!-- Thinking Ticker — always visible, bottom right -->
+<div id="thinking-ticker">
+  <div id="thinking-ticker-header">
+    <span class="ticker-title">Decision Flow</span>
+  </div>
+  <div id="thinking-ticker-entries"></div>
+</div>
+
 <div id="sidebar-tabs">
-  <div class="sidebar-tab active" data-panel="overview" title="Overview">&#9635;</div>
-  <div class="sidebar-tab" data-panel="process" title="Process">&#9881;</div>
+  <div class="sidebar-tab active" data-panel="process" title="Process &amp; Agents">&#9881;</div>
   <div class="sidebar-tab" data-panel="thinking" title="Thinking">&#9733;</div>
   <div class="sidebar-tab" data-panel="goals" title="Goals">&#9673;</div>
-  <div class="sidebar-tab" data-panel="daydream" title="Daydream">&#10038;</div>
-  <div class="sidebar-tab" data-panel="logs" title="Logs">&#9776;</div>
+  <div class="sidebar-tab" data-panel="logs" title="Logs &amp; Alerts">&#9776;</div>
   <div class="sidebar-tab" data-panel="raw" title="Raw Data">&#60;/&#62;</div>
 </div>
 
 <div id="sidebar">
 
-  <!-- Overview Panel -->
-  <div class="sidebar-panel active" id="panel-overview">
-    <div class="panel-header">Alerts</div>
-    <div id="alerts-container">
-      <div style="font-size:12px;color:var(--text-muted);">No alerts</div>
-    </div>
-
-    <div class="panel-header" style="margin-top:20px;">Daydream Hit Rate</div>
-    <div class="number-cell" style="max-width:140px;">
-      <div class="value" id="num-daydream">0%</div>
-      <div class="label">Cross-Domain Hits</div>
-    </div>
-
-    <div class="panel-header" style="margin-top:20px;">Heartbeat</div>
-    <div id="heartbeat-display" style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">Last heartbeat: --</div>
-  </div>
-
-  <!-- Process Panel -->
-  <div class="sidebar-panel" id="panel-process">
+  <!-- Process Panel (now default — merged with overview) -->
+  <div class="sidebar-panel active" id="panel-process">
     <div class="panel-header">Agent Loop Phase</div>
     <div class="phase-track" id="phase-track">
       <div class="phase-step pending" data-phase="read">READ</div>
@@ -1037,6 +1308,14 @@ svg#main-viz {
 
     <div class="panel-header" style="margin-top:16px;">Tool Calls</div>
     <div id="tool-calls-container"></div>
+
+    <div class="panel-header" style="margin-top:16px;">Alerts</div>
+    <div id="alerts-container">
+      <div style="font-size:12px;color:var(--text-muted);">No alerts</div>
+    </div>
+
+    <div class="panel-header" style="margin-top:16px;">Heartbeat</div>
+    <div id="heartbeat-display" style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">Last heartbeat: --</div>
   </div>
 
   <!-- Thinking Panel -->
@@ -1053,13 +1332,16 @@ svg#main-viz {
     <div class="panel-header">7-Day Allocation</div>
     <div class="allocation-bar" id="allocation-bar"></div>
     <div class="alloc-legend" id="alloc-legend"></div>
-  </div>
 
-  <!-- Daydream Panel -->
-  <div class="sidebar-panel" id="panel-daydream">
-    <div class="panel-header">Cross-Domain Opportunities</div>
+    <div class="panel-header" style="margin-top:16px;">Cross-Domain Opportunities</div>
     <div id="opportunities-container">
       <div style="font-size:12px;color:var(--text-muted);">No opportunities detected</div>
+    </div>
+
+    <div class="panel-header" style="margin-top:16px;">Daydream Hit Rate</div>
+    <div class="number-cell" style="max-width:140px;">
+      <div class="value" id="num-daydream">0%</div>
+      <div class="label">Cross-Domain Hits</div>
     </div>
   </div>
 
@@ -1129,7 +1411,7 @@ svg#main-viz {
     width: window.innerWidth,
     height: window.innerHeight,
     sidebarOpen: false,
-    activePanel: 'overview',
+    activePanel: 'process',
     metrics: { revenue: '$0', views: 0, tasksPerWeek: 0, skills: 0, daydreamHitRate: 0 },
     time: 0,
     mouse: { x: -1000, y: -1000 },
@@ -1291,7 +1573,7 @@ svg#main-viz {
 
     const cx = state.width / 2;
     const cy = state.height / 2;
-    const ringRadius = Math.min(state.width, state.height) * 0.28;
+    const ringRadius = Math.min(state.width, state.height) * 0.38;
 
     goals.forEach((goal, i) => {
       const angle = (i / goals.length) * Math.PI * 2 - Math.PI / 2;
@@ -1391,9 +1673,9 @@ svg#main-viz {
       .attr('cy', d => d.cy)
       .attr('r', d => d.radius + 20 + Math.sin(d.breathPhase) * 5)
       .attr('fill', 'none')
-      .attr('stroke', d => d.color.glow + (d.active ? '0.2)' : '0.07)'))
-      .attr('stroke-width', d => d.active ? 2 : 1)
-      .attr('filter', d => d.active ? `url(#glow-${d.colorKey})` : 'none');
+      .attr('stroke', d => d.color.glow + (d.active ? '0.12)' : '0.04)'))
+      .attr('stroke-width', d => d.active ? 1.5 : 0.5)
+      .attr('filter', 'none');
 
     colonyHalos.exit().remove();
 
@@ -1407,12 +1689,12 @@ svg#main-viz {
       .attr('text-anchor', 'middle')
       .attr('fill', d => d.color.base)
       .attr('font-family', 'var(--font-sans)')
-      .attr('font-weight', '600')
-      .attr('opacity', 0.6)
+      .attr('font-weight', '500')
+      .attr('opacity', 0.35)
       .merge(labels)
       .attr('x', d => d.cx)
       .attr('y', d => d.cy + d.radius + 36)
-      .attr('font-size', d => Math.max(10, 13 / state.zoom))
+      .attr('font-size', d => Math.max(9, 11 / state.zoom))
       .text(d => d.goal.name || d.id);
 
     labels.exit().remove();
@@ -1448,12 +1730,13 @@ svg#main-viz {
       .attr('r', d => d.radius)
       .attr('fill', d => {
         const c = d.colony.color;
-        const b = d.brightness * (d.colony.active ? 1 : 0.5);
+        const b = d.brightness * (d.colony.active ? 0.5 : 0.25);
         return c.glow + b + ')';
       })
       .attr('stroke', d => d.isActive && d.colony.active ? d.colony.color.base : 'none')
-      .attr('stroke-width', d => d.isActive ? 2 : 0)
-      .attr('filter', d => d.isActive && d.colony.active ? `url(#glow-${d.colony.colorKey})` : 'none');
+      .attr('stroke-width', d => d.isActive ? 1.5 : 0)
+      .attr('stroke-opacity', 0.6)
+      .attr('filter', 'none');
 
     // Type ring visibility based on zoom
     merged.select('.p-ring')
@@ -1581,10 +1864,8 @@ svg#main-viz {
     }
 
     // Update HUD metrics
-    document.getElementById('hud-revenue').textContent = state.metrics.revenue;
-    document.getElementById('hud-views').textContent = formatNumber(state.metrics.views);
-    document.getElementById('hud-tasks').textContent = state.metrics.tasksPerWeek;
-    document.getElementById('hud-skills').textContent = state.metrics.skills;
+    const hudTasks = document.getElementById('hud-tasks');
+    if (hudTasks) hudTasks.textContent = state.metrics.tasksPerWeek;
 
     // Update sidebar daydream stat
     const dd = document.getElementById('num-daydream');
@@ -1708,22 +1989,22 @@ svg#main-viz {
     if (!root) return;
     root.x = cx;
     root.y = cy;
-    root.nodeRadius = 30;
+    root.nodeRadius = 40;
 
     const children = agents.filter(a => a.parent === root.id);
-    const childRing = Math.min(140, state.width * 0.1);
+    const childRing = Math.min(200, state.width * 0.14);
     children.forEach((child, i) => {
       const angle = (i / Math.max(children.length, 1)) * Math.PI * 2 - Math.PI / 2;
       child.x = cx + Math.cos(angle) * childRing;
       child.y = cy + Math.sin(angle) * childRing;
-      child.nodeRadius = 22;
+      child.nodeRadius = 28;
 
       const grandchildren = agents.filter(a => a.parent === child.id);
       grandchildren.forEach((gc, j) => {
         const gcAngle = angle + (j - (grandchildren.length - 1) / 2) * 0.6;
-        gc.x = child.x + Math.cos(gcAngle) * 80;
-        gc.y = child.y + Math.sin(gcAngle) * 80;
-        gc.nodeRadius = 16;
+        gc.x = child.x + Math.cos(gcAngle) * 110;
+        gc.y = child.y + Math.sin(gcAngle) * 110;
+        gc.nodeRadius = 20;
       });
     });
   }
@@ -1751,7 +2032,7 @@ svg#main-viz {
       .attr('x2', d => d.target.x).attr('y2', d => d.target.y)
       .attr('stroke', d => {
         const ck = AGENT_COLORS[agents.indexOf(d.target) % AGENT_COLORS.length];
-        return PALETTE[ck].glow + '0.25)';
+        return PALETTE[ck].glow + '0.4)';
       })
       .attr('stroke-dasharray', d => d.target.status === 'done' ? 'none' : '6,4');
     links.exit().remove();
@@ -1760,7 +2041,7 @@ svg#main-viz {
     updateDataParticles(linkData);
     const dpData = state.dataParticles;
     const dps = agentTreeLayer.selectAll('.agent-data-particle').data(dpData, d => d.id);
-    dps.enter().append('circle').attr('class', 'agent-data-particle').attr('r', 2.5)
+    dps.enter().append('circle').attr('class', 'agent-data-particle').attr('r', 3.5)
       .merge(dps)
       .attr('cx', d => d.source.x + (d.target.x - d.source.x) * d.t)
       .attr('cy', d => d.source.y + (d.target.y - d.source.y) * d.t)
@@ -1802,27 +2083,28 @@ svg#main-viz {
         const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
         return PALETTE[ck].base;
       })
-      .attr('stroke-opacity', d => d.status === 'active' ? 0.8 : 0.3)
+      .attr('stroke-width', d => d.status === 'active' ? 2.5 : 1.5)
+      .attr('stroke-opacity', d => d.status === 'active' ? 0.9 : 0.4)
       .attr('fill', d => {
         const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
-        return PALETTE[ck].glow + (d.status === 'active' ? '0.15)' : '0.05)');
+        return PALETTE[ck].glow + (d.status === 'active' ? '0.2)' : '0.08)');
       });
 
     merged.select('.agent-node-label')
-      .attr('y', d => d.nodeRadius + 18)
+      .attr('y', d => d.nodeRadius + 20)
       .attr('fill', d => {
         const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
         return PALETTE[ck].base;
       })
-      .attr('font-size', d => d.nodeRadius > 24 ? 12 : 10)
-      .attr('opacity', 0.8)
+      .attr('font-size', d => d.nodeRadius > 30 ? 14 : d.nodeRadius > 24 ? 12 : 11)
+      .attr('opacity', 0.9)
       .text(d => d.label);
 
     merged.select('.agent-node-action')
-      .attr('y', d => d.nodeRadius + 32)
-      .attr('fill', 'var(--text-muted)')
-      .attr('opacity', state.zoom > 0.6 ? 0.7 : 0)
-      .text(d => truncate(d.currentAction || '', 30));
+      .attr('y', d => d.nodeRadius + 34)
+      .attr('fill', 'var(--text-secondary)')
+      .attr('opacity', state.zoom > 0.4 ? 0.75 : 0)
+      .text(d => truncate(d.currentAction || '', 35));
 
     // Tool badge
     merged.select('.agent-tool-bg')
@@ -1895,12 +2177,32 @@ svg#main-viz {
   // ----------------------------------------------------------
   function updatePhaseIndicator() {
     const phases = ['read', 'decide', 'execute', 'verify'];
+    const phaseLabels = { read: 'READ', decide: 'DECIDE', execute: 'EXEC', verify: 'VERIFY' };
     const currentIdx = phases.indexOf(state.agentPhase);
+
+    // Sidebar phase track
     document.querySelectorAll('#phase-track .phase-step').forEach(el => {
       const phase = el.dataset.phase;
       const idx = phases.indexOf(phase);
       el.className = 'phase-step ' + (idx < currentIdx ? 'done' : idx === currentIdx ? 'active' : 'pending');
     });
+
+    // HUD phase indicator
+    document.querySelectorAll('#hud-phase .hud-phase-step').forEach(el => {
+      const phase = el.dataset.phase;
+      const idx = phases.indexOf(phase);
+      el.className = 'hud-phase-step ' + (idx < currentIdx ? 'done' : idx === currentIdx ? 'active' : 'pending');
+    });
+    const hudLabel = document.getElementById('hud-phase-label');
+    if (hudLabel) hudLabel.textContent = phaseLabels[state.agentPhase] || '--';
+
+    // Mission Status phase badge
+    const badge = document.getElementById('mission-phase-badge');
+    if (badge) {
+      badge.className = 'mission-phase-badge ' + state.agentPhase;
+      badge.id = 'mission-phase-badge';
+      badge.textContent = phaseLabels[state.agentPhase] || '--';
+    }
   }
 
   function updateAgentCards() {
@@ -1983,6 +2285,89 @@ svg#main-viz {
         </div>
       `;
       container.appendChild(el);
+    });
+    container.scrollTop = container.scrollHeight;
+  }
+
+  // ----------------------------------------------------------
+  // Mission Status Panel
+  // ----------------------------------------------------------
+  function updateMissionStatus() {
+    // Phase badge (already handled by updatePhaseIndicator)
+
+    // Current task
+    if (state.activeTask) {
+      const t = state.activeTask;
+      const colony = state.colonies.get(t.goalId);
+      const goalBadge = document.getElementById('mission-goal-badge');
+      if (goalBadge) {
+        goalBadge.textContent = t.goalName || t.goalId || 'Agent';
+        if (colony) {
+          goalBadge.style.background = colony.color.dim;
+          goalBadge.style.color = colony.color.base;
+        }
+      }
+      const taskName = document.getElementById('mission-task-name');
+      if (taskName) taskName.textContent = t.name || 'Working...';
+      const taskDetail = document.getElementById('mission-task-detail');
+      if (taskDetail) taskDetail.textContent = t.status || '';
+    }
+
+    // Agent count + pips
+    const agentsRow = document.getElementById('mission-agents-row');
+    if (agentsRow) {
+      const agents = Array.from(state.agents.values());
+      agentsRow.innerHTML = '';
+      agents.forEach((agent, i) => {
+        const ck = AGENT_COLORS[i % AGENT_COLORS.length];
+        const color = PALETTE[ck];
+        const pip = document.createElement('span');
+        pip.className = 'mission-agent-pip' + (agent.status === 'active' ? ' active' : '');
+        pip.style.background = color.base;
+        pip.style.borderColor = color.glow + '0.5)';
+        pip.title = agent.label + ' (' + agent.status + ')';
+        agentsRow.appendChild(pip);
+      });
+      const count = document.createElement('span');
+      count.id = 'mission-agent-count';
+      count.textContent = agents.length + ' agent' + (agents.length !== 1 ? 's' : '') + ' active';
+      agentsRow.appendChild(count);
+    }
+
+    // Latest thinking
+    if (state.thinkingSteps.length > 0) {
+      const latest = state.thinkingSteps[state.thinkingSteps.length - 1];
+      const thinkText = document.getElementById('mission-thinking-text');
+      const thinkTime = document.getElementById('mission-thinking-time');
+      if (thinkText) thinkText.textContent = latest.text;
+      if (thinkTime) thinkTime.textContent = latest.time || '';
+    }
+  }
+
+  // ----------------------------------------------------------
+  // Thinking Ticker (always visible)
+  // ----------------------------------------------------------
+  function updateThinkingTicker() {
+    const container = document.getElementById('thinking-ticker-entries');
+    if (!container) return;
+    const steps = state.thinkingSteps;
+    if (steps.length === 0) {
+      container.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:8px 0;">Waiting for agent reasoning...</div>';
+      return;
+    }
+
+    // Show last 5 steps
+    const recent = steps.slice(-5);
+    container.innerHTML = '';
+    recent.forEach(step => {
+      const entry = document.createElement('div');
+      entry.className = 'ticker-entry';
+      entry.innerHTML = `
+        <span class="ticker-phase ${step.phase.toLowerCase()}">${escapeHtml(step.phase)}</span>
+        <span class="ticker-text">${escapeHtml(step.text)}</span>
+        <span class="ticker-time">${escapeHtml(step.time || '')}</span>
+      `;
+      container.appendChild(entry);
     });
     container.scrollTop = container.scrollHeight;
   }
@@ -2130,6 +2515,7 @@ svg#main-viz {
             state.agentPhase = data.phase;
             updatePhaseIndicator();
           }
+          updateMissionStatus();
           addFeedEntry('agent_status', 'Agent tree updated (' + state.agents.size + ' agents)');
         } catch(err) {}
       });
@@ -2159,6 +2545,8 @@ svg#main-viz {
           });
           if (state.thinkingSteps.length > 20) state.thinkingSteps = state.thinkingSteps.slice(-15);
           updateThinkingPanel();
+          updateThinkingTicker();
+          updateMissionStatus();
         } catch(err) {}
       });
 
@@ -2199,6 +2587,7 @@ svg#main-viz {
 
     updateHealthUI();
     updateSidebarOverview();
+    updateMissionStatus();
   }
 
   function handleGitActivity(data) {
@@ -2289,6 +2678,8 @@ svg#main-viz {
     layoutColonies();
     updateSidebarOverview();
     updateGoalsPanel();
+    updateMissionStatus();
+    updateThinkingTicker();
   }
 
   function handleStateResponse(data) {
@@ -2569,6 +2960,8 @@ Auth: tokens refreshed, no anomalies`;
     updateAgentCards();
     updateToolCalls();
     updateThinkingPanel();
+    updateMissionStatus();
+    updateThinkingTicker();
 
     // Seed activity feed
     addFeedEntry('system', 'Dashboard initialized (demo mode)');
@@ -2907,6 +3300,8 @@ Auth: tokens refreshed, no anomalies`;
     // Cap at 20
     if (state.thinkingSteps.length > 20) state.thinkingSteps = state.thinkingSteps.slice(-15);
     updateThinkingPanel();
+    updateThinkingTicker();
+    updateMissionStatus();
   }, 12000);
 
   // Cycle agent phase every 30s
@@ -2915,6 +3310,7 @@ Auth: tokens refreshed, no anomalies`;
     demoPhaseIdx = (demoPhaseIdx + 1) % demoPhases.length;
     state.agentPhase = demoPhases[demoPhaseIdx];
     updatePhaseIndicator();
+    updateMissionStatus();
     addFeedEntry('agent_status', 'Phase: ' + state.agentPhase.toUpperCase());
   }, 30000);
 
@@ -2932,6 +3328,7 @@ Auth: tokens refreshed, no anomalies`;
       agent.tokens.output += Math.floor(Math.random() * 500 + 200);
     }
     updateAgentCards();
+    updateMissionStatus();
   }, 6000);
 
   // ----------------------------------------------------------

@@ -61,45 +61,10 @@ svg#main-viz {
   width: 100%; height: 100%;
 }
 
-/* Health indicator - top left */
-#health-indicator {
-  position: fixed; top: 20px; left: 24px;
-  z-index: 100;
-  display: flex; align-items: center; gap: 10px;
-  pointer-events: none;
-}
-
-#health-dot {
-  width: 12px; height: 12px;
-  border-radius: 50%;
-  background: var(--health-green);
-  box-shadow: 0 0 12px rgba(34,197,94,0.6);
-  animation: healthPulse 2s ease-in-out infinite;
-}
-
-#health-dot.yellow { background: var(--health-yellow); box-shadow: 0 0 12px rgba(234,179,8,0.6); }
-#health-dot.red { background: var(--health-red); box-shadow: 0 0 12px rgba(239,68,68,0.6); }
-
+/* Health pulse animation (used by HUD dot) */
 @keyframes healthPulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.7; transform: scale(0.85); }
-}
-
-#health-text {
-  font-size: 13px; font-weight: 500;
-  color: var(--text-secondary);
-  text-shadow: 0 0 10px rgba(0,0,0,0.8);
-  letter-spacing: 0.02em;
-}
-
-/* Heartbeat - bottom left */
-#heartbeat-display {
-  position: fixed; bottom: 20px; left: 24px;
-  z-index: 100;
-  font-size: 11px; color: var(--text-muted);
-  font-family: var(--font-mono);
-  pointer-events: none;
-  text-shadow: 0 0 10px rgba(0,0,0,0.8);
 }
 
 /* Zoom level indicator */
@@ -484,16 +449,14 @@ svg#main-viz {
 #tooltip .tt-stat.del { color: var(--accent-rose); }
 #tooltip .tt-stat.files { color: var(--accent-cyan); }
 
-/* Connection status */
+/* Connection status (inside HUD) */
 #connection-status {
-  position: fixed; top: 20px; right: 60px;
-  z-index: 100;
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: 5px;
   font-size: 10px;
   font-family: var(--font-mono);
   color: var(--text-muted);
-  pointer-events: none;
-  text-shadow: 0 0 10px rgba(0,0,0,0.8);
+  margin-left: 12px;
+  flex-shrink: 0;
 }
 
 #conn-dot {
@@ -505,12 +468,217 @@ svg#main-viz {
 #conn-dot.disconnected { background: var(--health-red); }
 #conn-dot.connecting { background: var(--health-yellow); animation: healthPulse 1s ease-in-out infinite; }
 
+/* HUD Bar */
+#hud-bar {
+  position: fixed; top: 0; left: 0; right: 0;
+  z-index: 150;
+  height: 52px;
+  display: flex; align-items: center;
+  padding: 0 24px;
+  background: rgba(10, 10, 15, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border-subtle);
+  gap: 20px;
+}
+
+#hud-health {
+  display: flex; align-items: center; gap: 10px;
+  min-width: 180px;
+}
+
+#hud-health .hud-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--health-green);
+  box-shadow: 0 0 10px rgba(34,197,94,0.5);
+  animation: healthPulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+#hud-health .hud-dot.yellow { background: var(--health-yellow); box-shadow: 0 0 10px rgba(234,179,8,0.5); }
+#hud-health .hud-dot.red { background: var(--health-red); box-shadow: 0 0 10px rgba(239,68,68,0.5); }
+
+#hud-health .hud-status-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+#hud-task {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.hud-goal-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: rgba(74,158,255,0.15);
+  color: var(--accent-blue);
+}
+
+.hud-task-name {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-task-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+#hud-metrics {
+  display: flex; align-items: center; gap: 20px;
+  min-width: 180px;
+  justify-content: flex-end;
+}
+
+.hud-metric {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+}
+
+.hud-metric-value {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.hud-metric-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Activity Feed */
+#activity-feed {
+  position: fixed;
+  bottom: 20px; left: 24px;
+  z-index: 100;
+  width: 360px;
+  max-height: 320px;
+  background: rgba(10, 10, 15, 0.78);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#activity-feed.collapsed {
+  max-height: 36px;
+}
+
+#feed-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  user-select: none;
+}
+
+.feed-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  display: flex; align-items: center; gap: 6px;
+}
+
+.feed-count {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.feed-toggle {
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.3s;
+}
+
+#activity-feed.collapsed .feed-toggle {
+  transform: rotate(180deg);
+}
+
+#feed-entries {
+  max-height: 276px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+#feed-entries::-webkit-scrollbar { width: 3px; }
+#feed-entries::-webkit-scrollbar-track { background: transparent; }
+#feed-entries::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 2px; }
+
+.feed-entry {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 5px 14px;
+  animation: feedSlideIn 0.3s ease-out;
+}
+
+.feed-entry .feed-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+
+.feed-entry .feed-time {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 52px;
+  flex-shrink: 0;
+}
+
+.feed-entry .feed-msg {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes feedSlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* Mobile */
 @media (max-width: 768px) {
   #sidebar { width: 100vw; }
   #sidebar.open ~ #sidebar-tabs { right: 100vw; }
   .numbers-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
   .number-cell .value { font-size: 18px; }
+  #hud-bar { padding: 0 12px; gap: 10px; }
+  #hud-task .hud-task-name { max-width: 150px; }
+  #hud-metrics { gap: 10px; }
+  .hud-metric-value { font-size: 12px; }
+  #activity-feed { width: calc(100vw - 48px); left: 12px; }
 }
 
 /* Ambient background animation */
@@ -539,18 +707,36 @@ svg#main-viz {
   <svg id="main-viz"></svg>
 </div>
 
-<div id="health-indicator">
-  <div id="health-dot"></div>
-  <span id="health-text">Initializing...</span>
+<div id="hud-bar">
+  <div id="hud-health">
+    <div class="hud-dot" id="hud-health-dot"></div>
+    <span class="hud-status-text" id="hud-status-text">Initializing...</span>
+  </div>
+  <div id="hud-task">
+    <span class="hud-goal-badge" id="hud-goal-badge">Agent</span>
+    <span class="hud-task-name" id="hud-task-name">Waiting for status...</span>
+    <span class="hud-task-status" id="hud-task-status"></span>
+  </div>
+  <div id="hud-metrics">
+    <div class="hud-metric"><span class="hud-metric-value" id="hud-revenue">$0</span><span class="hud-metric-label">Rev</span></div>
+    <div class="hud-metric"><span class="hud-metric-value" id="hud-views">0</span><span class="hud-metric-label">Views</span></div>
+    <div class="hud-metric"><span class="hud-metric-value" id="hud-tasks">0</span><span class="hud-metric-label">Tasks/wk</span></div>
+    <div class="hud-metric"><span class="hud-metric-value" id="hud-skills">0</span><span class="hud-metric-label">Skills</span></div>
+    <div id="connection-status">
+      <div id="conn-dot" class="connecting"></div>
+      <span id="conn-text">connecting</span>
+    </div>
+  </div>
 </div>
-
-<div id="heartbeat-display">Last heartbeat: --</div>
 
 <div id="zoom-indicator">1.0x</div>
 
-<div id="connection-status">
-  <div id="conn-dot" class="connecting"></div>
-  <span id="conn-text">connecting</span>
+<div id="activity-feed">
+  <div id="feed-header">
+    <span class="feed-title">Activity <span class="feed-count" id="feed-count">0</span></span>
+    <span class="feed-toggle">&#9660;</span>
+  </div>
+  <div id="feed-entries"></div>
 </div>
 
 <div id="tooltip">
@@ -575,26 +761,19 @@ svg#main-viz {
 
   <!-- Overview Panel -->
   <div class="sidebar-panel active" id="panel-overview">
-    <div class="panel-header">Current Task</div>
-    <div class="task-card" id="current-task">
-      <div class="goal-badge" id="task-goal-badge" style="background:rgba(74,158,255,0.15);color:var(--accent-blue);">Loading</div>
-      <div class="task-name" id="task-name">Waiting for agent status...</div>
-      <div class="task-status" id="task-status">--</div>
-    </div>
-
-    <div class="panel-header">Key Numbers</div>
-    <div class="numbers-grid" id="numbers-grid">
-      <div class="number-cell"><div class="value" id="num-revenue">$0</div><div class="label">Revenue</div></div>
-      <div class="number-cell"><div class="value" id="num-views">0</div><div class="label">Views</div></div>
-      <div class="number-cell"><div class="value" id="num-tasks">0</div><div class="label">Tasks/Week</div></div>
-      <div class="number-cell"><div class="value" id="num-skills">0</div><div class="label">Skills</div></div>
-      <div class="number-cell" style="grid-column:span 2"><div class="value" id="num-daydream">0%</div><div class="label">Daydream Hit Rate</div></div>
-    </div>
-
     <div class="panel-header">Alerts</div>
     <div id="alerts-container">
       <div style="font-size:12px;color:var(--text-muted);">No alerts</div>
     </div>
+
+    <div class="panel-header" style="margin-top:20px;">Daydream Hit Rate</div>
+    <div class="number-cell" style="max-width:140px;">
+      <div class="value" id="num-daydream">0%</div>
+      <div class="label">Cross-Domain Hits</div>
+    </div>
+
+    <div class="panel-header" style="margin-top:20px;">Heartbeat</div>
+    <div id="heartbeat-display" style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">Last heartbeat: --</div>
   </div>
 
   <!-- Goals Panel -->
@@ -1110,24 +1289,29 @@ svg#main-viz {
   // Sidebar Rendering
   // ----------------------------------------------------------
   function updateSidebarOverview() {
+    // Update HUD task section
     if (state.activeTask) {
       const t = state.activeTask;
       const colony = state.colonies.get(t.goalId);
-      const badge = document.getElementById('task-goal-badge');
+      const badge = document.getElementById('hud-goal-badge');
       if (colony) {
         badge.style.background = colony.color.dim;
         badge.style.color = colony.color.base;
       }
       badge.textContent = t.goalName || t.goalId || 'Agent';
-      document.getElementById('task-name').textContent = t.name || 'Working...';
-      document.getElementById('task-status').textContent = t.status || 'active';
+      document.getElementById('hud-task-name').textContent = t.name || 'Working...';
+      document.getElementById('hud-task-status').textContent = t.status || '';
     }
 
-    document.getElementById('num-revenue').textContent = state.metrics.revenue;
-    document.getElementById('num-views').textContent = formatNumber(state.metrics.views);
-    document.getElementById('num-tasks').textContent = state.metrics.tasksPerWeek;
-    document.getElementById('num-skills').textContent = state.metrics.skills;
-    document.getElementById('num-daydream').textContent = state.metrics.daydreamHitRate + '%';
+    // Update HUD metrics
+    document.getElementById('hud-revenue').textContent = state.metrics.revenue;
+    document.getElementById('hud-views').textContent = formatNumber(state.metrics.views);
+    document.getElementById('hud-tasks').textContent = state.metrics.tasksPerWeek;
+    document.getElementById('hud-skills').textContent = state.metrics.skills;
+
+    // Update sidebar daydream stat
+    const dd = document.getElementById('num-daydream');
+    if (dd) dd.textContent = state.metrics.daydreamHitRate + '%';
   }
 
   function updateGoalsPanel() {
@@ -1267,6 +1451,7 @@ svg#main-viz {
         try {
           const data = JSON.parse(e.data);
           handleAgentStatus(data);
+          addFeedEntry('agent_status', 'Agent: ' + (data.status || modeLabel(data.mode || 'active')));
         } catch(err) { console.warn('SSE parse error:', err); }
       });
 
@@ -1277,6 +1462,7 @@ svg#main-viz {
           state.health = 'yellow';
           state.statusText = data.message || 'Stagnation detected';
           updateHealthUI();
+          addFeedEntry('stagnation', data.message || 'Stagnation detected');
         } catch(err) {}
       });
 
@@ -1284,7 +1470,9 @@ svg#main-viz {
         try {
           const data = JSON.parse(e.data);
           state.lastHeartbeat = data.timestamp || new Date().toISOString();
-          document.getElementById('heartbeat-display').textContent = 'Last heartbeat: ' + formatTime(state.lastHeartbeat);
+          const hbEl = document.getElementById('heartbeat-display');
+          if (hbEl) hbEl.textContent = 'Last heartbeat: ' + formatTime(state.lastHeartbeat);
+          addFeedEntry('heartbeat', 'Heartbeat received');
         } catch(err) {}
       });
 
@@ -1306,6 +1494,10 @@ svg#main-viz {
         try {
           const data = JSON.parse(e.data);
           updateOpportunities(data.items || data);
+          const sections = data.sections || data.items || data;
+          if (Array.isArray(sections) && sections.length > 0) {
+            addFeedEntry('opportunity', 'Opportunities updated (' + sections.length + ' items)');
+          }
         } catch(err) {}
       });
 
@@ -1314,6 +1506,7 @@ svg#main-viz {
           const data = JSON.parse(e.data);
           Object.assign(state.metrics, data);
           updateSidebarOverview();
+          addFeedEntry('metrics', 'Metrics updated');
         } catch(err) {}
       });
 
@@ -1321,6 +1514,7 @@ svg#main-viz {
         try {
           const data = JSON.parse(e.data);
           document.getElementById('raw-state').textContent = data.content || JSON.stringify(data, null, 2);
+          addFeedEntry('state', 'State file updated');
         } catch(err) {}
       });
 
@@ -1328,6 +1522,10 @@ svg#main-viz {
         try {
           const data = JSON.parse(e.data);
           updateLogs(data.entries || [data]);
+          const entries = data.entries || [data];
+          if (entries.length > 0) {
+            addFeedEntry('log', entries[0].text || entries[0].content || 'Log updated');
+          }
         } catch(err) {}
       });
 
@@ -1335,6 +1533,7 @@ svg#main-viz {
         try {
           const data = JSON.parse(e.data);
           document.getElementById('raw-strategy').textContent = data.content || JSON.stringify(data, null, 2);
+          addFeedEntry('strategy', 'Strategy updated');
         } catch(err) {}
       });
 
@@ -1423,7 +1622,9 @@ svg#main-viz {
       case 'daydream': handleDaydream(data); break;
       case 'heartbeat':
         state.lastHeartbeat = data.timestamp || new Date().toISOString();
-        document.getElementById('heartbeat-display').textContent = 'Last heartbeat: ' + formatTime(state.lastHeartbeat);
+        const hbDisplay = document.getElementById('heartbeat-display');
+        if (hbDisplay) hbDisplay.textContent = 'Last heartbeat: ' + formatTime(state.lastHeartbeat);
+        addFeedEntry('heartbeat', 'Heartbeat received');
         break;
       case 'metrics':
         Object.assign(state.metrics, data);
@@ -1661,15 +1862,29 @@ Dependencies: 0 critical, 1 moderate
 API Keys: rotated 2026-02-10
 Rate Limits: active, no violations
 Auth: tokens refreshed, no anomalies`;
+
+    // Seed activity feed
+    addFeedEntry('system', 'Dashboard initialized (demo mode)');
+    addFeedEntry('agent_status', 'Agent: Active \u2014 writing content pipeline');
+    addFeedEntry('heartbeat', 'Heartbeat received');
+    addFeedEntry('git', 'feat: Add RSS feed parser for content aggregation');
+    addFeedEntry('git', 'fix: Authentication token refresh logic');
+    addFeedEntry('metrics', 'Metrics updated \u2014 revenue $1,247');
+    addFeedEntry('opportunity', 'New cross-domain opportunity detected');
+    addFeedEntry('git', 'refactor: Content pipeline for parallel processing');
+    addFeedEntry('log', 'Published blog post on AI-assisted content creation');
+    addFeedEntry('heartbeat', 'Heartbeat received');
+    addFeedEntry('git', 'feat: Implement A/B testing framework for headlines');
+    addFeedEntry('strategy', 'Strategy updated \u2014 priority shift to audience growth');
   }
 
   // ----------------------------------------------------------
   // UI Updates
   // ----------------------------------------------------------
   function updateHealthUI() {
-    const dot = document.getElementById('health-dot');
-    dot.className = state.health === 'green' ? '' : state.health;
-    document.getElementById('health-text').textContent = state.statusText;
+    const dot = document.getElementById('hud-health-dot');
+    dot.className = 'hud-dot' + (state.health === 'green' ? '' : ' ' + state.health);
+    document.getElementById('hud-status-text').textContent = state.statusText;
   }
 
   function modeLabel(mode) {
@@ -1703,6 +1918,56 @@ Auth: tokens refreshed, no anomalies`;
     div.textContent = str;
     return div.innerHTML;
   }
+
+  // ----------------------------------------------------------
+  // Activity Feed
+  // ----------------------------------------------------------
+  const FEED_COLORS = {
+    agent_status: '#4a9eff',
+    heartbeat: '#34d399',
+    stagnation: '#f59e0b',
+    git: '#22d3ee',
+    metrics: '#a78bfa',
+    opportunity: '#f472b6',
+    state: '#6b7280',
+    log: '#9898b0',
+    strategy: '#8b5cf6',
+    system: '#606080',
+  };
+
+  const FEED_MAX = 50;
+  const feedEntries = [];
+
+  function addFeedEntry(type, message) {
+    const now = new Date();
+    const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const color = FEED_COLORS[type] || FEED_COLORS.system;
+
+    feedEntries.push({ time, message, color, type });
+    if (feedEntries.length > FEED_MAX) feedEntries.shift();
+
+    const container = document.getElementById('feed-entries');
+    const entry = document.createElement('div');
+    entry.className = 'feed-entry';
+    entry.innerHTML = `<span class="feed-dot" style="background:${color}"></span><span class="feed-time">${time}</span><span class="feed-msg">${escapeHtml(message)}</span>`;
+    container.appendChild(entry);
+
+    // Remove overflow
+    while (container.children.length > FEED_MAX) {
+      container.removeChild(container.firstChild);
+    }
+
+    // Auto-scroll
+    container.scrollTop = container.scrollHeight;
+
+    // Update count
+    document.getElementById('feed-count').textContent = feedEntries.length;
+  }
+
+  // Feed toggle
+  document.getElementById('feed-header').addEventListener('click', () => {
+    document.getElementById('activity-feed').classList.toggle('collapsed');
+  });
 
   // ----------------------------------------------------------
   // Animation Loop
@@ -1780,7 +2045,9 @@ Auth: tokens refreshed, no anomalies`;
   setInterval(() => {
     if (state.goals.length > 0 && !eventSource?.OPEN) {
       state.lastHeartbeat = new Date().toISOString();
-      document.getElementById('heartbeat-display').textContent = 'Last heartbeat: ' + formatTime(state.lastHeartbeat);
+      const hbEl = document.getElementById('heartbeat-display');
+      if (hbEl) hbEl.textContent = 'Last heartbeat: ' + formatTime(state.lastHeartbeat);
+      addFeedEntry('heartbeat', 'Heartbeat received');
     }
   }, 15000);
 
@@ -1826,6 +2093,8 @@ Auth: tokens refreshed, no anomalies`;
       target.particles.shift();
     }
     target.radius = Math.min(160, 60 + target.particles.length * 1.5);
+
+    addFeedEntry('git', commit.type + ': ' + commit.message);
   }
 
   // Spawn a new particle every 8-15 seconds in demo mode

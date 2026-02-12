@@ -213,17 +213,24 @@ def parse_goals(path: str) -> list[dict]:
 # ── Claude Code session scanning ────────────────────────────────────────────
 
 def _decode_project_path(encoded_name):
-    """Decode 'home-claude--agent-project' to a readable project name."""
+    """Decode '-home-claude-agent-project' to a readable project name.
+
+    Claude Code encodes paths by replacing / with -.
+    /home/claude-agent/project -> -home-claude-agent-project
+    """
     prefixes = [
-        "home-claude--agent-project-",
-        "home-claude--agent-",
+        "-home-claude-agent-project-",
+        "-home-claude-agent-project",
+        "-home-claude-agent-",
     ]
     name = encoded_name
     for prefix in prefixes:
         if name.startswith(prefix):
             name = name[len(prefix):]
             break
-    return name.replace("-", " ").title()
+    if not name:
+        return "Main Project"
+    return name.replace("-", " ").strip().title()
 
 
 def _tail_read(filepath, num_bytes=16384):

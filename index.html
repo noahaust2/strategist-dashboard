@@ -2072,18 +2072,12 @@ svg#main-viz {
 
     state.synapses = nodes;
 
-    // D3 force simulation — gentle settling in outer ring
+    // D3 force simulation — settle in outer ring, repel from center
     if (state.synapseSim) state.synapseSim.stop();
     state.synapseSim = d3.forceSimulation(nodes)
       .force('link', d3.forceLink(links).distance(18).strength(0.15))
       .force('charge', d3.forceManyBody().strength(-15).distanceMax(200))
-      .force('ring', d3.forceRadial(340, cx, cy).strength(0.04))
-      .force('avoid-center', d3.forceRadial(0, cx, cy).strength(d => {
-        // Push nodes away from center if they drift too close
-        const dx = d.x - cx, dy = d.y - cy;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        return dist < 220 ? -0.08 : 0;
-      }))
+      .force('ring', d3.forceRadial(340, cx, cy).strength(0.05))
       .alpha(0.4)
       .alphaDecay(0.015)
       .on('tick', () => {});
@@ -4137,7 +4131,6 @@ Auth: tokens refreshed, no anomalies`;
     };
 
     // Seed document metadata
-    const now = new Date();
     state.documents = {
       'GOALS.md': { exists: true, mtime: new Date(now - 86400000 * 3).toISOString(), size: 820 },
       'ASSETS.md': { exists: true, mtime: new Date(now - 86400000 * 5).toISOString(), size: 1450 },

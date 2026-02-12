@@ -901,7 +901,8 @@ svg#main-viz {
   #activity-feed { width: calc(100vw - 48px); left: 12px; }
   #mission-status { width: calc(100vw - 48px); left: 12px; }
   #thinking-ticker { width: calc(100vw - 48px); right: 12px; }
-  .viz-label { display: none; }
+  .section-marker { display: none; }
+  #legend { flex-wrap: wrap; width: calc(100vw - 48px); margin-bottom: 40px; }
 }
 
 /* Mission Status Panel — always visible, left side */
@@ -1101,30 +1102,215 @@ svg#main-viz {
   flex-shrink: 0;
 }
 
-/* Visual labels for on-screen elements */
-.viz-label {
+/* ── Welcome Guide Overlay ─────────────────────────────── */
+#welcome-guide {
+  position: fixed; inset: 0;
+  z-index: 1000;
+  background: rgba(5, 5, 10, 0.92);
+  backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity 0.4s;
+}
+
+#welcome-guide.hidden { opacity: 0; pointer-events: none; }
+
+#guide-content {
+  max-width: 680px;
+  padding: 40px;
+}
+
+#guide-content h1 {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+#guide-content .guide-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 32px;
+  line-height: 1.5;
+}
+
+.guide-areas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.guide-area {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.guide-area-number {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  font-size: 12px; font-weight: 700;
+  font-family: var(--font-mono);
+  margin-bottom: 10px;
+}
+
+.guide-area-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.guide-area-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+#guide-dismiss {
+  display: block;
+  margin: 0 auto;
+  padding: 10px 32px;
+  background: var(--accent-blue);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: background 0.2s;
+}
+
+#guide-dismiss:hover { background: #3a8eef; }
+
+/* Help button (re-open guide) */
+#help-btn {
   position: fixed;
-  font-size: 10px;
+  bottom: 20px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: 13px; font-weight: 700;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+
+#help-btn:hover { background: var(--bg-card); color: var(--text-secondary); border-color: var(--border-active); }
+
+/* ── Persistent Legend ─────────────────────────────────── */
+#legend {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99;
+  display: flex; align-items: center; gap: 18px;
+  background: rgba(10, 10, 15, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 8px 18px;
+  margin-bottom: 36px;
+}
+
+.legend-group {
+  display: flex; align-items: center; gap: 6px;
+}
+
+.legend-group-title {
+  font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
-  opacity: 0.5;
+  margin-right: 4px;
+}
+
+.legend-item {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.legend-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend-line {
+  width: 16px; height: 2px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.legend-divider {
+  width: 1px; height: 16px;
+  background: var(--border-subtle);
+}
+
+/* ── Section Markers (numbered circles) ────────────────── */
+.section-marker {
+  position: fixed;
+  z-index: 95;
+  display: flex; align-items: center; gap: 8px;
   pointer-events: none;
-  z-index: 90;
+}
+
+.section-number {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
   font-family: var(--font-mono);
 }
 
-#label-architecture {
-  top: 68px;
-  left: 50%;
-  transform: translateX(-50%);
+#marker-status {
+  top: 62px; left: 28px;
+}
+#marker-status .section-number {
+  background: rgba(34,211,238,0.15); color: var(--accent-cyan);
 }
 
-#label-goals {
-  bottom: 60px;
-  left: 50%;
+#marker-agents {
+  top: 62px; left: 50%;
   transform: translateX(-50%);
+}
+#marker-agents .section-number {
+  background: rgba(74,158,255,0.15); color: var(--accent-blue);
+}
+
+#marker-thinking {
+  bottom: 228px; right: 28px;
+}
+#marker-thinking .section-number {
+  background: rgba(167,139,250,0.15); color: var(--accent-violet);
+}
+
+#marker-goals {
+  bottom: 270px; left: 50%;
+  transform: translateX(-50%);
+}
+#marker-goals .section-number {
+  background: rgba(52,211,153,0.15); color: var(--accent-green);
 }
 
 /* HUD phase indicator */
@@ -1174,6 +1360,99 @@ svg#main-viz {
 </style>
 </head>
 <body>
+
+<!-- Welcome Guide (shows on first load) -->
+<div id="welcome-guide">
+  <div id="guide-content">
+    <h1>Autonomous Agent Dashboard</h1>
+    <div class="guide-subtitle">
+      This dashboard shows your AI agent system in real-time. Here's how to read it:
+    </div>
+    <div class="guide-areas">
+      <div class="guide-area">
+        <div class="guide-area-number" style="background:rgba(34,211,238,0.15);color:var(--accent-cyan);">1</div>
+        <div class="guide-area-title">Mission Status (top-left)</div>
+        <div class="guide-area-desc">
+          The agent's current <strong>phase</strong> (READ/DECIDE/EXEC/VERIFY),
+          what <strong>task</strong> it's working on, and how many
+          <strong>sub-agents</strong> are active. Start here to know what's happening right now.
+        </div>
+      </div>
+      <div class="guide-area">
+        <div class="guide-area-number" style="background:rgba(74,158,255,0.15);color:var(--accent-blue);">2</div>
+        <div class="guide-area-title">Agent Tree (center)</div>
+        <div class="guide-area-desc">
+          The <strong>Strategist</strong> is the large center node. It delegates to
+          <strong>teammates</strong> (medium nodes) who may spawn <strong>sub-agents</strong>
+          (small nodes). Animated dots show data flowing between them.
+        </div>
+      </div>
+      <div class="guide-area">
+        <div class="guide-area-number" style="background:rgba(167,139,250,0.15);color:var(--accent-violet);">3</div>
+        <div class="guide-area-title">Decision Flow (bottom-right)</div>
+        <div class="guide-area-desc">
+          A live feed of the agent's <strong>reasoning</strong>. Each step is tagged
+          with its phase (READ/DECIDE/EXEC/VERIFY) so you can see
+          <strong>how</strong> it's making decisions.
+        </div>
+      </div>
+      <div class="guide-area">
+        <div class="guide-area-number" style="background:rgba(52,211,153,0.15);color:var(--accent-green);">4</div>
+        <div class="guide-area-title">Goal Clusters (outer ring)</div>
+        <div class="guide-area-desc">
+          Each cluster of particles is a <strong>goal</strong> (Revenue, Audience, etc).
+          Each particle is a <strong>git commit</strong>. Larger/brighter clusters have
+          more recent activity. The active goal glows brighter.
+        </div>
+      </div>
+    </div>
+    <button id="guide-dismiss">Got it</button>
+  </div>
+</div>
+
+<!-- Section Markers (numbered reading flow) -->
+<div class="section-marker" id="marker-status">
+  <span class="section-number">1</span>
+  <span class="section-label">Current Status</span>
+</div>
+<div class="section-marker" id="marker-agents">
+  <span class="section-number">2</span>
+  <span class="section-label">Agent Architecture</span>
+</div>
+<div class="section-marker" id="marker-thinking">
+  <span class="section-number">3</span>
+  <span class="section-label">Decision Flow</span>
+</div>
+<div class="section-marker" id="marker-goals">
+  <span class="section-number">4</span>
+  <span class="section-label">Goal Clusters</span>
+</div>
+
+<!-- Legend -->
+<div id="legend">
+  <div class="legend-group">
+    <span class="legend-group-title">Phases</span>
+    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-cyan)"></span>Read</span>
+    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-amber)"></span>Decide</span>
+    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-blue)"></span>Exec</span>
+    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-green)"></span>Verify</span>
+  </div>
+  <div class="legend-divider"></div>
+  <div class="legend-group">
+    <span class="legend-group-title">Agents</span>
+    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-blue);width:12px;height:12px;"></span>Lead</span>
+    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-green);width:9px;height:9px;"></span>Team</span>
+    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-amber);width:7px;height:7px;"></span>Sub</span>
+  </div>
+  <div class="legend-divider"></div>
+  <div class="legend-group">
+    <span class="legend-group-title">Particles</span>
+    <span class="legend-item"><span class="legend-line" style="background:var(--accent-blue);"></span>= 1 commit</span>
+  </div>
+</div>
+
+<!-- Help button -->
+<button id="help-btn" title="How to read this dashboard">?</button>
 
 <div id="canvas-container">
   <canvas id="bg-canvas"></canvas>
@@ -1236,9 +1515,6 @@ svg#main-viz {
   </div>
 </div>
 
-<!-- Visual labels -->
-<div class="viz-label" id="label-architecture">Agent Architecture</div>
-<div class="viz-label" id="label-goals">Goal Clusters</div>
 
 <div id="zoom-indicator">1.0x</div>
 
@@ -1679,23 +1955,41 @@ svg#main-viz {
 
     colonyHalos.exit().remove();
 
-    // Colony labels (far zoom shows blobs, mid/close shows labels)
-    const labelData = state.zoom > 0.4 ? colonyData : [];
+    // Colony labels — goal name + commit count
+    const labelData = state.zoom > 0.3 ? colonyData : [];
     const labels = coloniesLayer.selectAll('.colony-label').data(labelData, d => d.id);
 
-    labels.enter()
-      .append('text')
-      .attr('class', 'colony-label')
+    const labelEntering = labels.enter()
+      .append('g')
+      .attr('class', 'colony-label');
+
+    labelEntering.append('text')
+      .attr('class', 'colony-name')
       .attr('text-anchor', 'middle')
-      .attr('fill', d => d.color.base)
       .attr('font-family', 'var(--font-sans)')
-      .attr('font-weight', '500')
-      .attr('opacity', 0.35)
-      .merge(labels)
-      .attr('x', d => d.cx)
-      .attr('y', d => d.cy + d.radius + 36)
-      .attr('font-size', d => Math.max(9, 11 / state.zoom))
+      .attr('font-weight', '600');
+
+    labelEntering.append('text')
+      .attr('class', 'colony-count')
+      .attr('text-anchor', 'middle')
+      .attr('font-family', 'var(--font-mono)')
+      .attr('font-size', 9);
+
+    const labelMerged = labelEntering.merge(labels);
+
+    labelMerged.attr('transform', d => `translate(${d.cx},${d.cy + d.radius + 30})`);
+
+    labelMerged.select('.colony-name')
+      .attr('fill', d => d.color.base)
+      .attr('opacity', d => d.active ? 0.6 : 0.35)
+      .attr('font-size', d => Math.max(10, 12 / state.zoom))
       .text(d => d.goal.name || d.id);
+
+    labelMerged.select('.colony-count')
+      .attr('y', 14)
+      .attr('fill', d => d.color.glow + '0.5)')
+      .attr('opacity', d => d.active ? 0.7 : 0.35)
+      .text(d => d.particles.length + ' commits' + (d.active ? ' \u2022 ACTIVE' : ''));
 
     labels.exit().remove();
 
@@ -2090,35 +2384,43 @@ svg#main-viz {
         return PALETTE[ck].glow + (d.status === 'active' ? '0.2)' : '0.08)');
       });
 
+    // Agent name INSIDE the circle
     merged.select('.agent-node-label')
-      .attr('y', d => d.nodeRadius + 20)
+      .attr('y', 1)
+      .attr('dominant-baseline', 'central')
       .attr('fill', d => {
         const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
         return PALETTE[ck].base;
       })
-      .attr('font-size', d => d.nodeRadius > 30 ? 14 : d.nodeRadius > 24 ? 12 : 11)
-      .attr('opacity', 0.9)
+      .attr('font-size', d => d.nodeRadius > 30 ? 13 : d.nodeRadius > 24 ? 11 : 9)
+      .attr('opacity', 1)
+      .text(d => d.label.length > 12 ? d.label.split(' ').map(w => w[0]).join('') : d.label);
+
+    // Full name below the circle
+    merged.select('.agent-node-action')
+      .attr('y', d => d.nodeRadius + 16)
+      .attr('fill', 'var(--text-secondary)')
+      .attr('font-size', 11)
+      .attr('opacity', 0.85)
+      .attr('text-anchor', 'middle')
       .text(d => d.label);
 
-    merged.select('.agent-node-action')
-      .attr('y', d => d.nodeRadius + 34)
-      .attr('fill', 'var(--text-secondary)')
-      .attr('opacity', state.zoom > 0.4 ? 0.75 : 0)
-      .text(d => truncate(d.currentAction || '', 35));
-
-    // Tool badge
+    // Tool badge — positioned below name
     merged.select('.agent-tool-bg')
-      .attr('x', -16).attr('y', d => -d.nodeRadius - 16)
-      .attr('width', 32).attr('height', 14)
-      .attr('rx', 3)
-      .attr('fill', d => d.currentTool ? 'var(--bg-card)' : 'none')
-      .attr('stroke', d => d.currentTool ? 'var(--border-subtle)' : 'none')
+      .attr('x', d => -(Math.min(60, (d.currentTool || '').length * 4 + 16)))
+      .attr('y', d => d.nodeRadius + 26)
+      .attr('width', d => Math.min(120, (d.currentTool || '').length * 8 + 32))
+      .attr('height', 16)
+      .attr('rx', 4)
+      .attr('fill', d => d.currentTool ? 'rgba(34,211,238,0.1)' : 'none')
+      .attr('stroke', d => d.currentTool ? 'rgba(34,211,238,0.25)' : 'none')
       .attr('stroke-width', 0.5);
 
     merged.select('.agent-node-tool-badge')
-      .attr('y', d => -d.nodeRadius - 6)
+      .attr('y', d => d.nodeRadius + 38)
       .attr('fill', 'var(--accent-cyan)')
-      .text(d => d.currentTool || '');
+      .attr('font-size', 10)
+      .text(d => d.currentTool ? d.currentTool + '()' : '');
 
     nodeGroups.exit().transition().duration(500).attr('opacity', 0).remove();
   }
@@ -3068,6 +3370,33 @@ Auth: tokens refreshed, no anomalies`;
   document.getElementById('feed-header').addEventListener('click', () => {
     document.getElementById('activity-feed').classList.toggle('collapsed');
   });
+
+  // ----------------------------------------------------------
+  // Welcome Guide
+  // ----------------------------------------------------------
+  const guideEl = document.getElementById('welcome-guide');
+  const guideDismissBtn = document.getElementById('guide-dismiss');
+  const helpBtn = document.getElementById('help-btn');
+
+  if (guideDismissBtn) {
+    guideDismissBtn.addEventListener('click', () => {
+      guideEl.classList.add('hidden');
+      try { localStorage.setItem('dashboard-guide-seen', '1'); } catch(e) {}
+    });
+  }
+
+  if (helpBtn) {
+    helpBtn.addEventListener('click', () => {
+      guideEl.classList.remove('hidden');
+    });
+  }
+
+  // Auto-hide guide if already seen
+  try {
+    if (localStorage.getItem('dashboard-guide-seen') === '1') {
+      guideEl.classList.add('hidden');
+    }
+  } catch(e) {}
 
   // ----------------------------------------------------------
   // Animation Loop

@@ -1719,6 +1719,7 @@ svg#main-viz {
     thinkingSteps: [],
     agentPhase: 'read',
     dataParticles: [],
+    liveConnected: false,
   };
 
   // ----------------------------------------------------------
@@ -2364,8 +2365,32 @@ svg#main-viz {
     const agents = Array.from(state.agents.values());
     if (agents.length === 0) {
       agentTreeLayer.selectAll('*').remove();
+      if (state.liveConnected) {
+        // Show empty state message in center
+        const cx = state.width / 2, cy = state.height / 2;
+        let emptyGroup = agentTreeLayer.select('.empty-state');
+        if (emptyGroup.empty()) {
+          emptyGroup = agentTreeLayer.append('g').attr('class', 'empty-state');
+          emptyGroup.append('circle')
+            .attr('cx', cx).attr('cy', cy).attr('r', 50)
+            .attr('fill', 'none').attr('stroke', 'rgba(255,255,255,0.15)')
+            .attr('stroke-width', 1.5).attr('stroke-dasharray', '6,4');
+          emptyGroup.append('text')
+            .attr('x', cx).attr('y', cy - 8)
+            .attr('text-anchor', 'middle').attr('fill', 'rgba(255,255,255,0.4)')
+            .attr('font-size', '13px').attr('font-family', 'inherit')
+            .text('No active sessions');
+          emptyGroup.append('text')
+            .attr('x', cx).attr('y', cy + 14)
+            .attr('text-anchor', 'middle').attr('fill', 'rgba(255,255,255,0.25)')
+            .attr('font-size', '11px').attr('font-family', 'inherit')
+            .text('Waiting for Claude Code...');
+        }
+      }
       return;
     }
+    // Remove empty state if agents appeared
+    agentTreeLayer.select('.empty-state').remove();
 
     layoutAgentTree();
 
@@ -2844,6 +2869,18 @@ svg#main-viz {
         sseRetryDelay = 1000;
         connDot.className = '';
         connText.textContent = 'connected';
+        if (!state.liveConnected) {
+          state.liveConnected = true;
+          // Clear demo data — real server will push live state
+          state.agents.clear();
+          state.toolCalls = [];
+          state.thinkingSteps = [];
+          renderAgentTree();
+          updateAgentCards();
+          updateToolCalls();
+          updateThinkingTicker();
+          updateMissionStatus();
+        }
       };
 
       eventSource.onerror = () => {
@@ -2959,8 +2996,18 @@ svg#main-viz {
           if (data.agents) {
             state.agents.clear();
             data.agents.forEach(a => state.agents.set(a.id, a));
-            layoutAgentTree();
+            renderAgentTree();
             updateAgentCards();
+            // Update HUD status based on session count
+            const sessionCount = data.agents.filter(a => !a.parent).length;
+            if (sessionCount === 0) {
+              state.statusText = 'No active sessions';
+              state.health = 'yellow';
+            } else {
+              state.statusText = sessionCount + ' session' + (sessionCount !== 1 ? 's' : '') + ' active';
+              state.health = 'green';
+            }
+            updateHealthUI();
           }
           if (data.phase) {
             state.agentPhase = data.phase;
@@ -3109,10 +3156,12 @@ svg#main-viz {
       { url: '/api/security', handler: handleSecurityResponse },
     ];
 
+    let anySuccess = false;
     for (const ep of endpoints) {
       try {
         const res = await fetch(ep.url);
         if (res.ok) {
+          anySuccess = true;
           const data = await res.json();
           ep.handler(data);
         }
@@ -3121,8 +3170,8 @@ svg#main-viz {
       }
     }
 
-    // If no goals loaded from API, seed demo data
-    if (state.goals.length === 0) {
+    // Only seed demo data if NO API endpoint responded (fully offline)
+    if (!anySuccess && state.goals.length === 0) {
       seedDemoData();
     }
 
@@ -3669,7 +3718,7 @@ Auth: tokens refreshed, no anomalies`;
 
   // Periodic demo heartbeat (for demo mode)
   setInterval(() => {
-    if (state.goals.length > 0 && !eventSource?.OPEN) {
+    if (state.goals.length > 0 && !state.liveConnected) {
       state.lastHeartbeat = new Date().toISOString();
       const hbEl = document.getElementById('heartbeat-display');
       if (hbEl) hbEl.textContent = 'Last heartbeat: ' + formatTime(state.lastHeartbeat);
@@ -3725,7 +3774,7 @@ Auth: tokens refreshed, no anomalies`;
 
   // Spawn a new particle every 8-15 seconds in demo mode
   setInterval(() => {
-    if (!eventSource?.OPEN) {
+    if (!state.liveConnected) {
       demoSpawnParticle();
     }
   }, 8000 + Math.random() * 7000);
@@ -3756,7 +3805,7 @@ Auth: tokens refreshed, no anomalies`;
 
   // Grow context every 5s
   setInterval(() => {
-    if (eventSource?.OPEN) return;
+    if (state.liveConnected) return;
     const ctx = state.context;
     ctx.conversation += Math.floor(Math.random() * 800 + 200);
     ctx.tools += Math.floor(Math.random() * 600 + 100);
@@ -3775,7 +3824,7 @@ Auth: tokens refreshed, no anomalies`;
 
   // Spawn tool call every 4-8s
   setInterval(() => {
-    if (eventSource?.OPEN) return;
+    if (state.liveConnected) return;
     const agents = Array.from(state.agents.keys());
     if (agents.length === 0) return;
 
@@ -3807,7 +3856,7 @@ Auth: tokens refreshed, no anomalies`;
 
   // Add thinking step every 12s
   setInterval(() => {
-    if (eventSource?.OPEN) return;
+    if (state.liveConnected) return;
     const step = demoThinkingTexts[demoThinkingIdx % demoThinkingTexts.length];
     demoThinkingIdx++;
 
@@ -3831,7 +3880,7 @@ Auth: tokens refreshed, no anomalies`;
 
   // Cycle agent phase every 30s
   setInterval(() => {
-    if (eventSource?.OPEN) return;
+    if (state.liveConnected) return;
     demoPhaseIdx = (demoPhaseIdx + 1) % demoPhases.length;
     state.agentPhase = demoPhases[demoPhaseIdx];
     updatePhaseIndicator();
@@ -3841,7 +3890,7 @@ Auth: tokens refreshed, no anomalies`;
 
   // Occasionally change agent tool/action
   setInterval(() => {
-    if (eventSource?.OPEN) return;
+    if (state.liveConnected) return;
     const agents = Array.from(state.agents.values());
     const agent = agents[Math.floor(Math.random() * agents.length)];
     if (!agent) return;

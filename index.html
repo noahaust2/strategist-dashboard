@@ -568,20 +568,9 @@ svg#main-viz {
   letter-spacing: 0.05em;
 }
 
-/* Activity Feed */
+/* Activity Feed — hidden (info available in sidebar Logs tab) */
 #activity-feed {
-  position: fixed;
-  bottom: 20px; left: 24px;
-  z-index: 100;
-  width: 320px;
-  max-height: 240px;
-  background: rgba(10, 10, 15, 0.78);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  overflow: hidden;
-  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: none;
 }
 
 #activity-feed.collapsed {
@@ -722,8 +711,64 @@ svg#main-viz {
   text-anchor: middle;
 }
 
-.agent-link-line { stroke-width: 2; fill: none; }
+.agent-link-path { stroke-width: 2; fill: none; transition: stroke 0.3s; }
 .agent-data-particle { pointer-events: none; }
+
+/* Agent node hover detail popup */
+#agent-detail {
+  position: fixed;
+  z-index: 300;
+  width: 260px;
+  background: rgba(10, 10, 15, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-active);
+  border-radius: 12px;
+  padding: 14px 16px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+#agent-detail.visible { opacity: 1; }
+
+#agent-detail-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+#agent-detail-status {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-block;
+  width: fit-content;
+}
+
+#agent-detail-tool {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--accent-cyan);
+}
+
+#agent-detail-action {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+#agent-detail-tokens {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 6px;
+}
 
 /* Phase Indicator */
 .phase-track {
@@ -907,17 +952,7 @@ svg#main-viz {
 
 /* Mission Status Panel — always visible, left side */
 #mission-status {
-  position: fixed;
-  top: 68px; left: 24px;
-  z-index: 100;
-  width: 320px;
-  background: rgba(10, 10, 15, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  padding: 18px 20px;
-  display: flex; flex-direction: column; gap: 14px;
+  display: none;
 }
 
 #mission-phase-row {
@@ -1029,19 +1064,9 @@ svg#main-viz {
   margin-top: 3px;
 }
 
-/* On-screen thinking ticker — right of mission status */
+/* Thinking ticker — hidden (info available in sidebar + node hover) */
 #thinking-ticker {
-  position: fixed;
-  bottom: 20px; right: 24px;
-  z-index: 100;
-  width: 340px;
-  max-height: 200px;
-  background: rgba(10, 10, 15, 0.82);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  overflow: hidden;
+  display: none;
 }
 
 #thinking-ticker-header {
@@ -1208,18 +1233,7 @@ svg#main-viz {
 
 /* ── Persistent Legend ─────────────────────────────────── */
 #legend {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 99;
-  display: flex; align-items: center; gap: 18px;
-  background: rgba(10, 10, 15, 0.8);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  padding: 8px 18px;
-  margin-bottom: 36px;
+  display: none;
 }
 
 .legend-group {
@@ -1260,10 +1274,7 @@ svg#main-viz {
 
 /* ── Section Markers (numbered circles) ────────────────── */
 .section-marker {
-  position: fixed;
-  z-index: 95;
-  display: flex; align-items: center; gap: 8px;
-  pointer-events: none;
+  display: none;
 }
 
 .section-number {
@@ -1534,6 +1545,15 @@ svg#main-viz {
     <span class="tt-stat del"></span>
     <span class="tt-stat files"></span>
   </div>
+</div>
+
+<!-- Agent node hover detail -->
+<div id="agent-detail">
+  <div id="agent-detail-name"></div>
+  <div id="agent-detail-status"></div>
+  <div id="agent-detail-tool"></div>
+  <div id="agent-detail-action"></div>
+  <div id="agent-detail-tokens"></div>
 </div>
 
 <!-- Thinking Ticker — always visible, bottom right -->
@@ -2281,26 +2301,63 @@ svg#main-viz {
 
     const root = agents.find(a => !a.parent);
     if (!root) return;
-    root.x = cx;
-    root.y = cy;
-    root.nodeRadius = 40;
 
-    const children = agents.filter(a => a.parent === root.id);
-    const childRing = Math.min(200, state.width * 0.14);
-    children.forEach((child, i) => {
-      const angle = (i / Math.max(children.length, 1)) * Math.PI * 2 - Math.PI / 2;
-      child.x = cx + Math.cos(angle) * childRing;
-      child.y = cy + Math.sin(angle) * childRing;
-      child.nodeRadius = 28;
+    // Build d3 hierarchy from flat agent list
+    function buildNode(agent) {
+      const children = agents.filter(a => a.parent === agent.id);
+      const node = { id: agent.id };
+      if (children.length > 0) node.children = children.map(c => buildNode(c));
+      return node;
+    }
 
-      const grandchildren = agents.filter(a => a.parent === child.id);
-      grandchildren.forEach((gc, j) => {
-        const gcAngle = angle + (j - (grandchildren.length - 1) / 2) * 0.6;
-        gc.x = child.x + Math.cos(gcAngle) * 110;
-        gc.y = child.y + Math.sin(gcAngle) * 110;
-        gc.nodeRadius = 20;
-      });
+    const hierarchy = d3.hierarchy(buildNode(root));
+
+    // Radial tree layout — spread branches around full circle
+    const maxRadius = Math.min(state.width, state.height) * 0.22;
+    const treeLayout = d3.tree()
+      .size([2 * Math.PI, maxRadius])
+      .separation((a, b) => (a.parent === b.parent ? 1 : 2) / a.depth);
+
+    treeLayout(hierarchy);
+
+    // Store tree center for rendering
+    state._treeCx = cx;
+    state._treeCy = cy;
+
+    // Apply computed positions to agent objects
+    hierarchy.each(node => {
+      const agent = state.agents.get(node.data.id);
+      if (!agent) return;
+
+      agent._angle = node.x;   // radians
+      agent._radius = node.y;  // distance from center
+
+      if (node.depth === 0) {
+        agent.x = cx;
+        agent.y = cy;
+        agent.nodeRadius = 40;
+      } else {
+        // Polar to cartesian (angle 0 = top, clockwise)
+        agent.x = cx + node.y * Math.sin(node.x);
+        agent.y = cy - node.y * Math.cos(node.x);
+        agent.nodeRadius = node.depth === 1 ? 28 : node.depth === 2 ? 20 : 16;
+      }
     });
+  }
+
+  // Quadratic bezier helpers for curved links & particle interpolation
+  function computeLinkCurve(source, target) {
+    const cx = state._treeCx, cy = state._treeCy;
+    const mx = (source.x + target.x) / 2;
+    const my = (source.y + target.y) / 2;
+    // Pull control point toward center for organic tendril curves
+    const pull = 0.35;
+    return { cpx: mx + (cx - mx) * pull, cpy: my + (cy - my) * pull };
+  }
+
+  function bezierPoint(sx, sy, cpx, cpy, tx, ty, t) {
+    const u = 1 - t;
+    return { x: u*u*sx + 2*u*t*cpx + t*t*tx, y: u*u*sy + 2*u*t*cpy + t*t*ty };
   }
 
   function renderAgentTree() {
@@ -2312,18 +2369,21 @@ svg#main-viz {
 
     layoutAgentTree();
 
-    // Links
-    const linkData = agents.filter(a => a.parent && state.agents.has(a.parent)).map(a => ({
-      source: state.agents.get(a.parent),
-      target: a,
-      id: a.id + '-link',
-    }));
+    // Build link data with curve control points
+    const linkData = agents.filter(a => a.parent && state.agents.has(a.parent)).map(a => {
+      const source = state.agents.get(a.parent);
+      const curve = computeLinkCurve(source, a);
+      return {
+        source, target: a, id: a.id + '-link',
+        cpx: curve.cpx, cpy: curve.cpy,
+      };
+    });
 
-    const links = agentTreeLayer.selectAll('.agent-link-line').data(linkData, d => d.id);
-    links.enter().append('line').attr('class', 'agent-link-line')
+    // Curved path links (tendrils)
+    const links = agentTreeLayer.selectAll('.agent-link-path').data(linkData, d => d.id);
+    links.enter().append('path').attr('class', 'agent-link-path')
       .merge(links)
-      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
-      .attr('x2', d => d.target.x).attr('y2', d => d.target.y)
+      .attr('d', d => `M${d.source.x},${d.source.y} Q${d.cpx},${d.cpy} ${d.target.x},${d.target.y}`)
       .attr('stroke', d => {
         const ck = AGENT_COLORS[agents.indexOf(d.target) % AGENT_COLORS.length];
         return PALETTE[ck].glow + '0.4)';
@@ -2331,14 +2391,20 @@ svg#main-viz {
       .attr('stroke-dasharray', d => d.target.status === 'done' ? 'none' : '6,4');
     links.exit().remove();
 
-    // Data particles flowing along links
+    // Data particles flowing along curved links
     updateDataParticles(linkData);
     const dpData = state.dataParticles;
     const dps = agentTreeLayer.selectAll('.agent-data-particle').data(dpData, d => d.id);
     dps.enter().append('circle').attr('class', 'agent-data-particle').attr('r', 3.5)
       .merge(dps)
-      .attr('cx', d => d.source.x + (d.target.x - d.source.x) * d.t)
-      .attr('cy', d => d.source.y + (d.target.y - d.source.y) * d.t)
+      .attr('cx', d => {
+        const pt = bezierPoint(d.source.x, d.source.y, d.cpx, d.cpy, d.target.x, d.target.y, d.t);
+        return pt.x;
+      })
+      .attr('cy', d => {
+        const pt = bezierPoint(d.source.x, d.source.y, d.cpx, d.cpy, d.target.x, d.target.y, d.t);
+        return pt.y;
+      })
       .attr('fill', d => {
         const ck = AGENT_COLORS[agents.indexOf(d.target) % AGENT_COLORS.length];
         return PALETTE[ck] ? PALETTE[ck].base : '#4a9eff';
@@ -2349,7 +2415,10 @@ svg#main-viz {
     // Agent nodes
     const nodeGroups = agentTreeLayer.selectAll('.agent-node-g').data(agents, d => d.id);
 
-    const entering = nodeGroups.enter().append('g').attr('class', 'agent-node-g');
+    const entering = nodeGroups.enter().append('g').attr('class', 'agent-node-g')
+      .style('cursor', 'pointer')
+      .on('mouseenter', function(event, d) { showAgentDetail(d, event); })
+      .on('mouseleave', function() { hideAgentDetail(); });
     entering.append('circle').attr('class', 'agent-node-bg');
     entering.append('circle').attr('class', 'agent-node-ring');
     entering.append('text').attr('class', 'agent-node-label');
@@ -2423,6 +2492,38 @@ svg#main-viz {
       .text(d => d.currentTool ? d.currentTool + '()' : '');
 
     nodeGroups.exit().transition().duration(500).attr('opacity', 0).remove();
+
+    // Goal tendrils — connect leaf agents to their goal colonies
+    const goalTendrilData = agents
+      .filter(a => a.goalId && state.colonies.has(a.goalId) && !agents.some(c => c.parent === a.id))
+      .map(a => {
+        const colony = state.colonies.get(a.goalId);
+        return {
+          id: a.id + '-goal',
+          agent: a,
+          colony,
+          colorKey: colony.colorKey,
+        };
+      });
+
+    const goalTendrils = agentTreeLayer.selectAll('.goal-tendril').data(goalTendrilData, d => d.id);
+    goalTendrils.enter().append('path').attr('class', 'goal-tendril')
+      .merge(goalTendrils)
+      .attr('d', d => {
+        const ax = d.agent.x, ay = d.agent.y;
+        const gx = d.colony.cx, gy = d.colony.cy;
+        const mx = (ax + gx) / 2, my = (ay + gy) / 2;
+        const cx = state._treeCx, cy = state._treeCy;
+        // Control point pulled away from center for outward arc
+        const cpx = mx - (cx - mx) * 0.3;
+        const cpy = my - (cy - my) * 0.3;
+        return `M${ax},${ay} Q${cpx},${cpy} ${gx},${gy}`;
+      })
+      .attr('stroke', d => PALETTE[d.colorKey] ? PALETTE[d.colorKey].glow + '0.15)' : 'rgba(255,255,255,0.08)')
+      .attr('stroke-width', 1)
+      .attr('stroke-dasharray', '4,6')
+      .attr('fill', 'none');
+    goalTendrils.exit().remove();
   }
 
   function updateDataParticles(linkData) {
@@ -2434,6 +2535,7 @@ svg#main-viz {
             id: 'dp-' + Math.random().toString(36).slice(2),
             source: link.source,
             target: link.target,
+            cpx: link.cpx, cpy: link.cpy,
             t: 0,
             speed: 0.015 + Math.random() * 0.01,
           });
@@ -2446,6 +2548,51 @@ svg#main-viz {
   }
 
   function truncate(s, n) { return s.length > n ? s.slice(0, n) + '...' : s; }
+
+  // Agent node hover detail popup
+  const agentDetailEl = document.getElementById('agent-detail');
+
+  function showAgentDetail(agent, event) {
+    const det = agentDetailEl;
+    document.getElementById('agent-detail-name').textContent = agent.label;
+
+    const statusEl = document.getElementById('agent-detail-status');
+    statusEl.textContent = agent.status || 'idle';
+    const statusColors = { active: 'var(--accent-green)', idle: 'var(--text-muted)', done: 'var(--accent-blue)' };
+    const statusBgs = { active: 'rgba(52,211,153,0.15)', idle: 'rgba(96,96,128,0.15)', done: 'rgba(74,158,255,0.15)' };
+    statusEl.style.color = statusColors[agent.status] || statusColors.idle;
+    statusEl.style.background = statusBgs[agent.status] || statusBgs.idle;
+
+    document.getElementById('agent-detail-tool').textContent = agent.currentTool ? agent.currentTool + '()' : 'No active tool';
+    document.getElementById('agent-detail-action').textContent = agent.currentAction || 'Idle';
+
+    const tok = agent.tokens;
+    document.getElementById('agent-detail-tokens').textContent = tok
+      ? `${(tok.total / 1000).toFixed(1)}K tokens (${(tok.input / 1000).toFixed(1)}K in / ${(tok.output / 1000).toFixed(1)}K out)`
+      : '';
+
+    // Position relative to the node — offset to the right
+    const rect = document.getElementById('main-viz').getBoundingClientRect();
+    const transform = d3.zoomTransform(d3.select('#main-viz').node());
+    const screenX = transform.applyX(agent.x) + rect.left;
+    const screenY = transform.applyY(agent.y) + rect.top;
+
+    let left = screenX + agent.nodeRadius + 16;
+    let top = screenY - 40;
+
+    // Keep on screen
+    if (left + 270 > window.innerWidth) left = screenX - 280;
+    if (top < 60) top = 60;
+    if (top + 160 > window.innerHeight) top = window.innerHeight - 170;
+
+    det.style.left = left + 'px';
+    det.style.top = top + 'px';
+    det.classList.add('visible');
+  }
+
+  function hideAgentDetail() {
+    agentDetailEl.classList.remove('visible');
+  }
 
   // ----------------------------------------------------------
   // Context Meter
@@ -3181,34 +3328,76 @@ API Keys: rotated 2026-02-10
 Rate Limits: active, no violations
 Auth: tokens refreshed, no anomalies`;
 
-    // Seed agent tree
+    // Seed agent tree — branching hierarchy with goal associations
     state.agents.set('strategist', {
       id: 'strategist', label: 'Strategist', parent: null,
-      status: 'active', currentTool: 'Task',
+      status: 'active', currentTool: 'Task', goalId: 'audience',
       currentAction: 'Coordinating content pipeline',
       tokens: { input: 45200, output: 12800, total: 58000 },
       x: 0, y: 0, nodeRadius: 30,
     });
     state.agents.set('content-writer', {
       id: 'content-writer', label: 'Content Writer', parent: 'strategist',
-      status: 'active', currentTool: 'Write',
+      status: 'active', currentTool: 'Write', goalId: 'audience',
       currentAction: 'Drafting blog post on AI applications',
       tokens: { input: 22000, output: 8500, total: 30500 },
       x: 0, y: 0, nodeRadius: 22,
     });
+    state.agents.set('blog-drafter', {
+      id: 'blog-drafter', label: 'Blog Drafter', parent: 'content-writer',
+      status: 'active', currentTool: 'Write', goalId: 'audience',
+      currentAction: 'Writing intro section',
+      tokens: { input: 6000, output: 3200, total: 9200 },
+      x: 0, y: 0, nodeRadius: 16,
+    });
+    state.agents.set('seo-optimizer', {
+      id: 'seo-optimizer', label: 'SEO Optimizer', parent: 'content-writer',
+      status: 'active', currentTool: 'Grep', goalId: 'audience',
+      currentAction: 'Analyzing keyword density',
+      tokens: { input: 4800, output: 1600, total: 6400 },
+      x: 0, y: 0, nodeRadius: 16,
+    });
     state.agents.set('research-scout', {
       id: 'research-scout', label: 'Research Scout', parent: 'strategist',
-      status: 'active', currentTool: 'WebSearch',
+      status: 'active', currentTool: 'WebSearch', goalId: 'research',
       currentAction: 'Searching competitor strategies',
       tokens: { input: 15000, output: 4200, total: 19200 },
       x: 0, y: 0, nodeRadius: 22,
     });
     state.agents.set('deep-researcher', {
       id: 'deep-researcher', label: 'Deep Researcher', parent: 'research-scout',
-      status: 'active', currentTool: 'Read',
+      status: 'active', currentTool: 'Read', goalId: 'research',
       currentAction: 'Reading embedding analysis paper',
       tokens: { input: 8000, output: 2100, total: 10100 },
       x: 0, y: 0, nodeRadius: 16,
+    });
+    state.agents.set('trend-analyzer', {
+      id: 'trend-analyzer', label: 'Trend Analyzer', parent: 'research-scout',
+      status: 'active', currentTool: 'WebFetch', goalId: 'research',
+      currentAction: 'Fetching trending topics API',
+      tokens: { input: 5200, output: 1800, total: 7000 },
+      x: 0, y: 0, nodeRadius: 16,
+    });
+    state.agents.set('code-engineer', {
+      id: 'code-engineer', label: 'Code Engineer', parent: 'strategist',
+      status: 'active', currentTool: 'Edit', goalId: 'infrastructure',
+      currentAction: 'Implementing RSS parser',
+      tokens: { input: 18000, output: 9200, total: 27200 },
+      x: 0, y: 0, nodeRadius: 22,
+    });
+    state.agents.set('test-runner', {
+      id: 'test-runner', label: 'Test Runner', parent: 'code-engineer',
+      status: 'active', currentTool: 'Bash', goalId: 'infrastructure',
+      currentAction: 'Running integration tests',
+      tokens: { input: 3200, output: 800, total: 4000 },
+      x: 0, y: 0, nodeRadius: 16,
+    });
+    state.agents.set('data-analyst', {
+      id: 'data-analyst', label: 'Data Analyst', parent: 'strategist',
+      status: 'active', currentTool: 'Read', goalId: 'revenue',
+      currentAction: 'Analyzing engagement metrics',
+      tokens: { input: 11000, output: 3400, total: 14400 },
+      x: 0, y: 0, nodeRadius: 22,
     });
 
     // Seed context usage
@@ -3228,15 +3417,20 @@ Auth: tokens refreshed, no anomalies`;
       { id: 1, agent: 'strategist', tool: 'Read', target: 'STATE.md', status: 'done', duration: 120 },
       { id: 2, agent: 'strategist', tool: 'Read', target: 'GOALS.md', status: 'done', duration: 85 },
       { id: 3, agent: 'strategist', tool: 'Read', target: 'METRICS.md', status: 'done', duration: 92 },
-      { id: 4, agent: 'strategist', tool: 'Read', target: 'OPPORTUNITIES.md', status: 'done', duration: 78 },
-      { id: 5, agent: 'strategist', tool: 'Task', target: 'Content Writer', status: 'running', duration: null },
-      { id: 6, agent: 'content-writer', tool: 'WebSearch', target: 'AI content trends 2026', status: 'done', duration: 3200 },
-      { id: 7, agent: 'content-writer', tool: 'Read', target: 'research/content-strategy.md', status: 'done', duration: 140 },
-      { id: 8, agent: 'content-writer', tool: 'Write', target: 'blog-post-draft.md', status: 'running', duration: null },
-      { id: 9, agent: 'strategist', tool: 'Task', target: 'Research Scout', status: 'running', duration: null },
+      { id: 4, agent: 'strategist', tool: 'Task', target: 'Content Writer', status: 'running', duration: null },
+      { id: 5, agent: 'strategist', tool: 'Task', target: 'Research Scout', status: 'running', duration: null },
+      { id: 6, agent: 'strategist', tool: 'Task', target: 'Code Engineer', status: 'running', duration: null },
+      { id: 7, agent: 'strategist', tool: 'Task', target: 'Data Analyst', status: 'running', duration: null },
+      { id: 8, agent: 'content-writer', tool: 'Task', target: 'Blog Drafter', status: 'running', duration: null },
+      { id: 9, agent: 'content-writer', tool: 'Task', target: 'SEO Optimizer', status: 'running', duration: null },
       { id: 10, agent: 'research-scout', tool: 'WebSearch', target: 'competitor content strategies', status: 'done', duration: 2800 },
       { id: 11, agent: 'research-scout', tool: 'Task', target: 'Deep Researcher', status: 'running', duration: null },
-      { id: 12, agent: 'deep-researcher', tool: 'Read', target: 'research/embedding-analysis.md', status: 'running', duration: null },
+      { id: 12, agent: 'research-scout', tool: 'Task', target: 'Trend Analyzer', status: 'running', duration: null },
+      { id: 13, agent: 'deep-researcher', tool: 'Read', target: 'research/embedding-analysis.md', status: 'running', duration: null },
+      { id: 14, agent: 'code-engineer', tool: 'Edit', target: 'src/rss-parser.ts', status: 'running', duration: null },
+      { id: 15, agent: 'code-engineer', tool: 'Task', target: 'Test Runner', status: 'running', duration: null },
+      { id: 16, agent: 'test-runner', tool: 'Bash', target: 'npm test', status: 'running', duration: null },
+      { id: 17, agent: 'data-analyst', tool: 'Read', target: 'analytics/engagement.csv', status: 'running', duration: null },
     ];
 
     // Seed thinking steps

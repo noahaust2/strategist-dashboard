@@ -1664,7 +1664,7 @@ svg#main-viz {
     <div id="system-evolution-stats" style="display:flex;gap:16px;margin-bottom:12px;">
       <div class="number-cell" style="flex:1;">
         <div class="value" id="synapse-total-count">0</div>
-        <div class="label">Total Commits</div>
+        <div class="label">Self-Mods</div>
       </div>
       <div class="number-cell" style="flex:1;">
         <div class="value" id="synapse-week-count">0</div>
@@ -2025,36 +2025,40 @@ svg#main-viz {
   // ----------------------------------------------------------
   // Synapse Tree — Growing Neural Network
   // ----------------------------------------------------------
-  function initSynapseTree(commitData) {
-    if (!commitData || commitData.length === 0) return;
+  // Self-modification types — only these become synapse nodes
+  const SELF_MOD_TYPES = new Set(['rules', 'review', 'identity', 'skill', 'strategy', 'research', 'metrics']);
 
-    // Find the strategist node center for root position
+  function initSynapseTree(synapseData) {
+    if (!synapseData || synapseData.length === 0) return;
+
     const cx = state._treeCx || state.width / 2;
     const cy = state._treeCy || state.height / 2;
 
-    // Limit to most recent 150 commits for performance, reversed so oldest first
-    const commits = commitData.slice(0, 150).reverse();
+    // Only self-modification events, most recent 100, oldest first
+    const events = synapseData
+      .filter(s => SELF_MOD_TYPES.has(s.type))
+      .slice(0, 100).reverse();
 
-    // Build nodes with positions biased by type angle
-    const nodes = commits.map((s, i) => {
+    if (events.length === 0) return;
+
+    // Place nodes in an outer ring (280-420px from center) so they don't overlap agent tree
+    const nodes = events.map((s, i) => {
       const typeAngle = SYNAPSE_TYPE_ANGLES[s.type] || 0;
-      const jitter = (Math.random() - 0.5) * 0.8;
-      const dist = 60 + Math.random() * 200;
+      const jitter = (Math.random() - 0.5) * 0.6;
+      const dist = 280 + Math.random() * 140;
       return {
         hash: s.hash,
         date: s.date,
         message: s.message,
         type: s.type || 'other',
-        goal: s.goal,
         index: i,
         x: cx + Math.cos(typeAngle + jitter) * dist,
         y: cy + Math.sin(typeAngle + jitter) * dist,
-        fx: null, fy: null,
         age: s.date ? (Date.now() - new Date(s.date).getTime()) / 86400000 : 30,
       };
     });
 
-    // Build parent links — each node connects to nearest earlier node of same type
+    // Chain nodes of same type chronologically
     const links = [];
     const typeGroups = {};
     nodes.forEach((n, i) => {
@@ -2062,38 +2066,32 @@ svg#main-viz {
       const group = typeGroups[n.type];
       if (group.length > 0) {
         links.push({ source: group[group.length - 1], target: i });
-      } else if (i > 0) {
-        links.push({ source: 0, target: i });
       }
       group.push(i);
     });
 
-    // Also cross-link nodes that share the same goal
-    const goalGroups = {};
-    nodes.forEach((n, i) => {
-      if (!n.goal) return;
-      if (!goalGroups[n.goal]) goalGroups[n.goal] = [];
-      const g = goalGroups[n.goal];
-      if (g.length > 0 && Math.random() < 0.3) { // Sparse cross-links
-        links.push({ source: g[g.length - 1], target: i });
-      }
-      g.push(i);
-    });
-
     state.synapses = nodes;
 
-    // D3 force simulation — gentle, low alpha
+    // D3 force simulation — gentle settling in outer ring
     if (state.synapseSim) state.synapseSim.stop();
     state.synapseSim = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink(links).distance(20).strength(0.12))
-      .force('charge', d3.forceManyBody().strength(-12).distanceMax(250))
-      .force('center', d3.forceRadial(160, cx, cy).strength(0.025))
+      .force('link', d3.forceLink(links).distance(18).strength(0.15))
+      .force('charge', d3.forceManyBody().strength(-15).distanceMax(200))
+      .force('ring', d3.forceRadial(340, cx, cy).strength(0.04))
+      .force('avoid-center', d3.forceRadial(0, cx, cy).strength(d => {
+        // Push nodes away from center if they drift too close
+        const dx = d.x - cx, dy = d.y - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        return dist < 220 ? -0.08 : 0;
+      }))
       .alpha(0.4)
       .alphaDecay(0.015)
       .on('tick', () => {});
   }
 
   function addSynapse(synapse) {
+    if (!SELF_MOD_TYPES.has(synapse.type)) return; // Only self-mod events
+
     const cx = state._treeCx || state.width / 2;
     const cy = state._treeCy || state.height / 2;
     const typeAngle = SYNAPSE_TYPE_ANGLES[synapse.type] || 0;
@@ -2101,16 +2099,17 @@ svg#main-viz {
     // Find nearest existing node of same type to branch from
     let parent = null;
     let minDist = Infinity;
-    state.synapses.filter(n => !n.ephemeral).forEach(n => {
+    state.synapses.forEach(n => {
       if (n.type === synapse.type) {
-        const d = Math.sqrt((n.x - cx) ** 2 + (n.y - cy) ** 2);
+        const dx = n.x - cx, dy = n.y - cy;
+        const d = Math.sqrt(dx * dx + dy * dy);
         if (d < minDist) { minDist = d; parent = n; }
       }
     });
 
-    const startX = parent ? parent.x : cx;
-    const startY = parent ? parent.y : cy;
-    const dist = 25 + Math.random() * 40;
+    const startX = parent ? parent.x : cx + Math.cos(typeAngle) * 300;
+    const startY = parent ? parent.y : cy + Math.sin(typeAngle) * 300;
+    const dist = 20 + Math.random() * 30;
 
     const node = {
       ...synapse,
@@ -2119,102 +2118,41 @@ svg#main-viz {
       y: startY + Math.sin(typeAngle) * dist,
       age: 0,
       isNew: true,
-      ephemeral: false,
     };
     state.synapses.push(node);
 
     if (state.synapseSim) {
-      state.synapseSim.nodes(state.synapses.filter(n => !n.ephemeral));
+      state.synapseSim.nodes(state.synapses);
       state.synapseSim.alpha(0.15).restart();
     }
 
     setTimeout(() => { node.isNew = false; }, 2000);
   }
 
-  // Ephemeral synapses — tool calls and thinking events that flash and fade
-  function addEphemeralSynapse(data) {
-    const cx = state._treeCx || state.width / 2;
-    const cy = state._treeCy || state.height / 2;
-
-    // Map tool names to synapse types for positioning
-    const toolTypeMap = {
-      Read: 'research', Grep: 'research', Glob: 'research', WebSearch: 'research',
-      Write: 'feat', Edit: 'feat', Bash: 'feat',
-      Task: 'skill', TodoWrite: 'state', Skill: 'skill',
-    };
-    const type = data.type || toolTypeMap[data.tool] || 'other';
-    const typeAngle = SYNAPSE_TYPE_ANGLES[type] || 0;
-
-    // Position near the relevant type cluster
-    const permanentOfType = state.synapses.filter(n => !n.ephemeral && n.type === type);
-    let px = cx, py = cy;
-    if (permanentOfType.length > 0) {
-      const ref = permanentOfType[permanentOfType.length - 1];
-      px = ref.x;
-      py = ref.y;
-    }
-
-    const jitter = 20 + Math.random() * 30;
-    const angle = typeAngle + (Math.random() - 0.5) * 1.5;
-
-    const node = {
-      hash: 'eph-' + Date.now() + Math.random().toString(36).slice(2, 5),
-      type,
-      message: data.description || data.tool || '',
-      x: px + Math.cos(angle) * jitter,
-      y: py + Math.sin(angle) * jitter,
-      ephemeral: true,
-      birthTime: state.time,
-      fadeFrames: 180, // ~6 seconds at 30fps
-      age: 0,
-      isNew: true,
-    };
-    state.synapses.push(node);
-    setTimeout(() => { node.isNew = false; }, 800);
-  }
-
   function renderSynapseTree() {
-    // Remove expired ephemeral nodes
-    state.synapses = state.synapses.filter(n => {
-      if (n.ephemeral && (state.time - n.birthTime) > n.fadeFrames) return false;
-      return true;
-    });
-
     const nodes = state.synapses;
     if (nodes.length === 0) {
       synapseTreeLayer.selectAll('*').remove();
       return;
     }
 
-    const cx = state._treeCx || state.width / 2;
-    const cy = state._treeCy || state.height / 2;
-    const permanentNodes = nodes.filter(n => !n.ephemeral);
-    const ephemeralNodes = nodes.filter(n => n.ephemeral);
-
-    // Build dendrite links (permanent nodes only)
+    // Build dendrite links — chain by type
     const dendrites = [];
     const typeChains = {};
-    permanentNodes.forEach((n, i) => {
+    nodes.forEach((n, i) => {
       if (!typeChains[n.type]) typeChains[n.type] = [];
       const chain = typeChains[n.type];
       if (chain.length > 0) {
         const srcIdx = chain[chain.length - 1];
-        dendrites.push({ source: permanentNodes[srcIdx], target: n, id: `syn-${srcIdx}-${i}` });
-      } else if (i > 0) {
-        dendrites.push({ source: permanentNodes[0], target: n, id: `syn-root-${i}` });
+        dendrites.push({ source: nodes[srcIdx], target: n, id: `syn-${srcIdx}-${i}` });
       }
       chain.push(i);
     });
 
-    // Connect first node to center
-    if (permanentNodes.length > 0) {
-      dendrites.unshift({ source: { x: cx, y: cy }, target: permanentNodes[0], id: 'syn-center-0' });
-    }
-
     // Breathing opacity
     const breathe = 0.2 + Math.sin(state.time * 0.015) * 0.08;
 
-    // Render dendrites (permanent connections)
+    // Render dendrites
     const dLinks = synapseTreeLayer.selectAll('.synapse-dendrite').data(dendrites, d => d.id);
     dLinks.enter().append('line').attr('class', 'synapse-dendrite')
       .merge(dLinks)
@@ -2228,56 +2166,31 @@ svg#main-viz {
       .attr('opacity', d => d.target.isNew ? 0.8 : breathe);
     dLinks.exit().remove();
 
-    // Render permanent synapse nodes
-    const sNodes = synapseTreeLayer.selectAll('.synapse-node').data(permanentNodes, d => d.hash);
+    // Render synapse nodes
+    const sNodes = synapseTreeLayer.selectAll('.synapse-node').data(nodes, d => d.hash);
     const sEnter = sNodes.enter().append('circle').attr('class', 'synapse-node')
       .attr('r', 0);
-    sEnter.transition().duration(800).attr('r', 3);
+    sEnter.transition().duration(800).attr('r', 4);
 
     sEnter.merge(sNodes)
       .attr('cx', d => d.x).attr('cy', d => d.y)
       .attr('r', d => {
-        if (d.isNew) return 4 + Math.sin(state.time * 0.1) * 1.5;
-        const ageFade = Math.max(0.4, 1 - d.age * 0.015);
-        return 1.5 + ageFade * 2;
+        if (d.isNew) return 5 + Math.sin(state.time * 0.1) * 1.5;
+        const ageFade = Math.max(0.5, 1 - d.age * 0.012);
+        return 2.5 + ageFade * 2;
       })
       .attr('fill', d => {
         const c = SYNAPSE_COLORS[d.type] || SYNAPSE_COLORS.other;
-        const ageBright = d.isNew ? 0.8 : Math.max(0.1, 0.5 - d.age * 0.008);
+        const ageBright = d.isNew ? 0.9 : Math.max(0.15, 0.6 - d.age * 0.006);
         return c.glow + ageBright + ')';
       })
       .attr('stroke', d => d.isNew ? (SYNAPSE_COLORS[d.type] || SYNAPSE_COLORS.other).base : 'none')
       .attr('stroke-width', d => d.isNew ? 1.5 : 0);
     sNodes.exit().remove();
 
-    // Render ephemeral nodes (tool calls / thinking — flash and fade)
-    const eNodes = synapseTreeLayer.selectAll('.synapse-ephemeral').data(ephemeralNodes, d => d.hash);
-    eNodes.enter().append('circle').attr('class', 'synapse-ephemeral')
-      .attr('r', 0)
-      .transition().duration(300).attr('r', 4)
-      .merge(eNodes);
-
-    synapseTreeLayer.selectAll('.synapse-ephemeral')
-      .data(ephemeralNodes, d => d.hash)
-      .attr('cx', d => d.x).attr('cy', d => d.y)
-      .attr('r', d => {
-        const life = (state.time - d.birthTime) / d.fadeFrames;
-        return d.isNew ? 5 : Math.max(0.5, 4 * (1 - life));
-      })
-      .attr('fill', d => {
-        const c = SYNAPSE_COLORS[d.type] || SYNAPSE_COLORS.other;
-        const life = (state.time - d.birthTime) / d.fadeFrames;
-        return c.glow + Math.max(0, 0.7 * (1 - life)) + ')';
-      })
-      .attr('stroke', d => {
-        const c = SYNAPSE_COLORS[d.type] || SYNAPSE_COLORS.other;
-        return d.isNew ? c.base : 'none';
-      })
-      .attr('stroke-width', d => d.isNew ? 1 : 0);
-    eNodes.exit().remove();
-
-    // Synapse count label
-    const permCount = permanentNodes.length;
+    // Count label below center
+    const cx = state._treeCx || state.width / 2;
+    const cy = state._treeCy || state.height / 2;
     let countLabel = synapseTreeLayer.select('.synapse-count-label');
     if (countLabel.empty()) {
       countLabel = synapseTreeLayer.append('text').attr('class', 'synapse-count-label')
@@ -2288,7 +2201,7 @@ svg#main-viz {
     }
     countLabel
       .attr('x', cx).attr('y', cy + 60)
-      .text(permCount + ' commits');
+      .text(nodes.length + ' learned');
   }
 
   // ----------------------------------------------------------
@@ -2713,21 +2626,17 @@ svg#main-viz {
     // Document Flow diagram
     renderDocFlowDiagram();
 
-    // Evolution stats
-    const permanentSynapses = state.synapses.filter(n => !n.ephemeral);
-    document.getElementById('synapse-total-count').textContent = permanentSynapses.length;
+    // Evolution stats — all synapses are self-mod events now
+    document.getElementById('synapse-total-count').textContent = state.synapses.length;
 
-    // Count this week's commits
+    // Count this week's events
     const weekAgo = Date.now() - 7 * 86400000;
-    const weekCount = permanentSynapses.filter(n => n.date && new Date(n.date).getTime() > weekAgo).length;
+    const weekCount = state.synapses.filter(n => n.date && new Date(n.date).getTime() > weekAgo).length;
     document.getElementById('synapse-week-count').textContent = '+' + weekCount;
 
-    // Evolution timeline (most recent self-modification commits)
+    // Evolution timeline (most recent self-modification events)
     const timelineContainer = document.getElementById('system-evolution-timeline');
-    const selfModTypes = ['rules', 'review', 'identity', 'skill', 'strategy'];
-    const selfMods = permanentSynapses
-      .filter(n => selfModTypes.includes(n.type))
-      .slice(-20).reverse();
+    const selfMods = state.synapses.slice(-20).reverse();
 
     if (selfMods.length > 0) {
       timelineContainer.innerHTML = '';
@@ -3690,8 +3599,6 @@ svg#main-viz {
           }
           if (state.toolCalls.length > 30) state.toolCalls = state.toolCalls.slice(-25);
           updateToolCalls();
-          // Feed tool calls as ephemeral synapses
-          addEphemeralSynapse({ tool: data.tool, description: data.description || data.target || '' });
         } catch(err) {}
       });
 
@@ -3709,8 +3616,6 @@ svg#main-viz {
           updateThinkingPanel();
           updateThinkingTicker();
           updateMissionStatus();
-          // Feed thinking as ephemeral synapse
-          addEphemeralSynapse({ type: 'strategy', description: (data.text || '').slice(0, 40) });
         } catch(err) {}
       });
 
@@ -3890,10 +3795,7 @@ svg#main-viz {
     const commits = data.commits || data;
     if (!Array.isArray(commits)) return;
     handleGitActivity(commits);
-    // Initialize synapse tree from all commits
-    if (commits.length > 0 && state.synapses.filter(n => !n.ephemeral).length === 0) {
-      initSynapseTree(commits);
-    }
+    // Synapse tree is now initialized from /api/architecture synapses, not all commits
   }
 
   function handleDaydreamResponse(data) {
@@ -3921,6 +3823,10 @@ svg#main-viz {
     }
     if (data.reviewCycles) {
       state.reviewStatus = data.reviewCycles;
+    }
+    // Initialize synapse tree from self-modification events
+    if (data.synapses && data.synapses.length > 0 && state.synapses.length === 0) {
+      initSynapseTree(data.synapses);
     }
     updateSystemPanel();
   }
@@ -4242,17 +4148,38 @@ Auth: tokens refreshed, no anomalies`;
       'LOG.md': { exists: true, mtime: new Date(now - 300000).toISOString(), size: 8500 },
     };
 
-    // Seed synapse tree from demo commits
-    const demoCommitTypes = ['feat', 'fix', 'refactor', 'docs', 'research', 'skill', 'rules', 'review', 'state', 'strategy', 'chore'];
+    // Seed synapse tree from self-modification events only
+    const demoSynapseMessages = [
+      { type: 'rules', message: 'rules: add goal-advancement scoring rule' },
+      { type: 'rules', message: 'rules: strengthen commit message conventions' },
+      { type: 'rules', message: 'rules: add stagnation detection threshold' },
+      { type: 'rules', message: 'rules: refine teammate delegation criteria' },
+      { type: 'skill', message: 'skill: add seo-analyzer tool' },
+      { type: 'skill', message: 'skill: add reddit-research scanner' },
+      { type: 'skill', message: 'skill: add content-calendar generator' },
+      { type: 'review', message: 'review: cycle 3 — improve research depth' },
+      { type: 'review', message: 'review: cycle 4 — reduce context waste' },
+      { type: 'review', message: 'review: cycle 5 — faster decision loops' },
+      { type: 'strategy', message: 'strategy: pivot to audience-first approach' },
+      { type: 'strategy', message: 'strategy: increase content frequency to 2x/day' },
+      { type: 'strategy', message: 'strategy: add cross-domain research allocation' },
+      { type: 'research', message: 'research: complete competitor landscape analysis' },
+      { type: 'research', message: 'research: TikTok algorithm deep dive' },
+      { type: 'research', message: 'research: pricing model evaluation for SaaS' },
+      { type: 'identity', message: 'identity: refine voice to be more direct' },
+      { type: 'identity', message: 'identity: update capabilities assessment' },
+      { type: 'metrics', message: 'metrics: add engagement rate tracking' },
+      { type: 'metrics', message: 'metrics: track content pipeline throughput' },
+    ];
     const demoSynapseCommits = [];
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 25; i++) {
       const daysAgo = Math.random() * 30;
+      const msg = demoSynapseMessages[i % demoSynapseMessages.length];
       demoSynapseCommits.push({
         hash: Math.random().toString(36).slice(2, 9),
         date: new Date(Date.now() - daysAgo * 86400000).toISOString(),
-        message: messages[i % messages.length],
-        type: demoCommitTypes[Math.floor(Math.random() * demoCommitTypes.length)],
-        goal: state.goals[Math.floor(Math.random() * state.goals.length)].id,
+        message: msg.message,
+        type: msg.type,
       });
     }
     initSynapseTree(demoSynapseCommits);
@@ -4602,9 +4529,6 @@ Auth: tokens refreshed, no anomalies`;
     if (state.toolCalls.length > 30) state.toolCalls = state.toolCalls.slice(-25);
     updateToolCalls();
     addFeedEntry('git', agentId + ' \u2192 ' + tool + '(' + target + ')');
-
-    // Feed tool call as ephemeral synapse
-    addEphemeralSynapse({ tool: tool, description: target });
   }, 4000 + Math.random() * 4000);
 
   // Add thinking step every 12s

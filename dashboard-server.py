@@ -10,6 +10,7 @@ Endpoints:
     GET /api/git     → commits, goal distribution, daily activity
     GET /api/daydream→ D3-compatible node-link graph
     GET /api/security→ security events, wrapper events, backup status
+    GET /api/architecture → goals, assets, document metadata, synapse history
     GET /api/stream  → SSE event stream (persistent connection)
 """
 
@@ -42,6 +43,21 @@ WATCHED_FILES = {
     os.path.join(PROJECT_DIR, ".planning", "METRICS.md"):       "metrics",
     os.path.join(PROJECT_DIR, ".planning", "LOG.md"):           "log",
     os.path.join(PROJECT_DIR, ".planning", "STRATEGY.md"):      "strategy",
+    os.path.join(PROJECT_DIR, ".planning", "GOALS.md"):         "goals_full",
+    os.path.join(PROJECT_DIR, ".planning", "ASSETS.md"):        "assets_full",
+}
+
+# Commit prefixes that indicate self-modification / learning events
+SYNAPSE_PATTERNS = re.compile(
+    r"^(rules|review|identity|skill|strategy|research|opps|metrics|self-mod):",
+    re.IGNORECASE,
+)
+
+# Map commit prefix to synapse type for visualization
+SYNAPSE_TYPE_MAP = {
+    "rules": "rules", "review": "review", "identity": "identity",
+    "skill": "skill", "strategy": "strategy", "research": "research",
+    "opps": "research", "metrics": "metrics", "self-mod": "rules",
 }
 
 GOAL_COLORS = [
@@ -210,6 +226,117 @@ def parse_goals(path: str) -> list[dict]:
             color = GOAL_COLORS[len(goals) % len(GOAL_COLORS)]
             goals.append({"name": name, "color": color})
     return goals
+
+
+def parse_goals_full(path: str) -> list[dict]:
+    """Parse GOALS.md returning goal names with full text blocks."""
+    text = _read_file(path)
+    if text is None:
+        return []
+    goals = []
+    current = None
+    for line in text.splitlines():
+        if line.startswith("## "):
+            if current:
+                current["text"] = current["text"].strip()
+                goals.append(current)
+            name = line[3:].strip()
+            color = GOAL_COLORS[len(goals) % len(GOAL_COLORS)]
+            current = {"name": name, "color": color, "text": ""}
+        elif current is not None:
+            current["text"] += line + "\n"
+    if current:
+        current["text"] = current["text"].strip()
+        goals.append(current)
+    return goals
+
+
+def parse_assets(path: str) -> dict[str, list[str]]:
+    """Parse ASSETS.md returning categorized asset items."""
+    text = _read_file(path)
+    if text is None:
+        return {}
+    categories: dict[str, list[str]] = {}
+    current_cat = "_general"
+    for line in text.splitlines():
+        if line.startswith("## "):
+            current_cat = line[3:].strip()
+            categories.setdefault(current_cat, [])
+        elif line.strip().startswith("- ") or line.strip().startswith("* "):
+            item = line.strip().lstrip("-* ").strip()
+            if item:
+                categories.setdefault(current_cat, []).append(item)
+    # Remove empty _general if it has no items
+    if "_general" in categories and not categories["_general"]:
+        del categories["_general"]
+    return categories
+
+
+def get_document_metadata() -> dict[str, dict]:
+    """Stat all planning files and return metadata."""
+    planning_dir = os.path.join(PROJECT_DIR, ".planning")
+    files_to_check = [
+        "GOALS.md", "ASSETS.md", "STATE.md", "STRATEGY.md",
+        "OPPORTUNITIES.md", "METRICS.md", "LOG.md",
+    ]
+    docs = {}
+    for fname in files_to_check:
+        fpath = os.path.join(planning_dir, fname)
+        try:
+            st = os.stat(fpath)
+            docs[fname] = {
+                "exists": True,
+                "mtime": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
+                "size": st.st_size,
+            }
+        except OSError:
+            docs[fname] = {"exists": False, "mtime": None, "size": 0}
+    return docs
+
+
+def get_synapse_history() -> list[dict]:
+    """Extract self-modification commits from git log (learning events)."""
+    try:
+        result = subprocess.run(
+            ["git", "log", "--pretty=format:%H|%aI|%s", "-500"],
+            capture_output=True, text=True, timeout=15,
+            cwd=PROJECT_DIR,
+        )
+        raw = result.stdout.strip()
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return []
+
+    synapses = []
+    for line in raw.splitlines():
+        parts = line.split("|", 2)
+        if len(parts) < 3:
+            continue
+        sha, date_str, message = parts
+        m = SYNAPSE_PATTERNS.match(message)
+        if m:
+            prefix = m.group(1).lower()
+            syn_type = SYNAPSE_TYPE_MAP.get(prefix, "other")
+            synapses.append({
+                "hash": sha[:8],
+                "date": date_str,
+                "message": message,
+                "type": syn_type,
+            })
+    return synapses
+
+
+def get_review_status() -> dict:
+    """Read the review counter file to determine review cycle status."""
+    counter_path = os.path.join(STATUS_DIR, "review-counter")
+    try:
+        with open(counter_path, "r") as f:
+            count = int(f.read().strip())
+    except (OSError, ValueError):
+        count = 0
+    return {
+        "sessionsSinceReview": count,
+        "interval": 5,
+    }
 
 
 # ── Claude Code session scanning ────────────────────────────────────────────
@@ -503,6 +630,10 @@ def _read_watched_file(path: str, event_type: str):
         return parse_opportunities(path)
     if event_type == "metrics":
         return parse_metrics(path)
+    if event_type == "goals_full":
+        return parse_goals_full(path)
+    if event_type == "assets_full":
+        return parse_assets(path)
     return parse_markdown_raw(path)
 
 
@@ -532,13 +663,13 @@ def file_watcher():
 COMMIT_TYPE_RE = re.compile(r"^(\w+)(?:\(.+?\))?:\s*(.+)")
 
 def refresh_git_data():
-    """Run git log and build structured commit data."""
+    """Run git log and build structured commit data, including synapse history."""
     goals = parse_goals(os.path.join(PROJECT_DIR, "GOALS.md"))
     goal_names = [g["name"].lower() for g in goals]
 
     try:
         result = subprocess.run(
-            ["git", "log", "--pretty=format:%H|%aI|%s", "-200"],
+            ["git", "log", "--pretty=format:%H|%aI|%s", "-500"],
             capture_output=True, text=True, timeout=15,
             cwd=PROJECT_DIR,
         )
@@ -547,6 +678,7 @@ def refresh_git_data():
         raw = ""
 
     commits = []
+    synapses = []
     goal_dist: dict[str, int] = defaultdict(int)
     daily: dict[str, int] = defaultdict(int)
 
@@ -579,11 +711,23 @@ def refresh_git_data():
             "goal": matched_goal,
         })
 
+        # Check if this commit is a synapse (learning/self-modification event)
+        sm = SYNAPSE_PATTERNS.match(message)
+        if sm:
+            prefix = sm.group(1).lower()
+            synapses.append({
+                "hash": sha[:8],
+                "date": date_str,
+                "message": message,
+                "type": SYNAPSE_TYPE_MAP.get(prefix, "other"),
+            })
+
     data = {
         "commits": commits,
         "goals": goals,
         "goal_distribution": dict(goal_dist),
         "daily_activity": dict(daily),
+        "synapses": synapses,
     }
     with cache_lock:
         git_cache.update(data)
@@ -714,6 +858,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/daydream":
             self._send_json(build_daydream_graph())
+
+        elif path == "/api/architecture":
+            goals_path = os.path.join(PROJECT_DIR, ".planning", "GOALS.md")
+            assets_path = os.path.join(PROJECT_DIR, ".planning", "ASSETS.md")
+            with cache_lock:
+                synapses = git_cache.get("synapses", [])
+            self._send_json({
+                "goals": parse_goals_full(goals_path),
+                "assets": parse_assets(assets_path),
+                "documents": get_document_metadata(),
+                "synapses": synapses,
+                "reviewCycles": get_review_status(),
+            })
 
         elif path == "/api/security":
             sec_path = os.path.join(PROJECT_DIR, ".planning", "LOG.md")

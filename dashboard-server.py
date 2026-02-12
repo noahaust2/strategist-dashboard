@@ -336,6 +336,59 @@ def _parse_session_tail(lines):
     return result
 
 
+def _aggregate_daily_tokens():
+    """Sum token usage from all JSONL files modified today across all project dirs."""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    total_input = 0
+    total_output = 0
+    session_count = 0
+
+    for projects_dir in CLAUDE_PROJECTS_DIRS:
+        if not os.path.isdir(projects_dir):
+            continue
+        for project_dir in os.listdir(projects_dir):
+            project_path = os.path.join(projects_dir, project_dir)
+            if not os.path.isdir(project_path):
+                continue
+            for jsonl_path in glob.glob(os.path.join(project_path, "*.jsonl")):
+                try:
+                    mtime = os.path.getmtime(jsonl_path)
+                except OSError:
+                    continue
+                # Only count files modified today
+                file_date = datetime.fromtimestamp(mtime, tz=timezone.utc).strftime("%Y-%m-%d")
+                if file_date != today:
+                    continue
+                session_count += 1
+                # Read entire file and sum all usage blocks
+                try:
+                    with open(jsonl_path, "r", encoding="utf-8", errors="replace") as f:
+                        for line in f:
+                            line = line.strip()
+                            if not line or '"usage"' not in line:
+                                continue
+                            try:
+                                entry = json.loads(line)
+                            except json.JSONDecodeError:
+                                continue
+                            if entry.get("type") != "assistant":
+                                continue
+                            usage = entry.get("message", {}).get("usage", {})
+                            if usage:
+                                total_input += usage.get("input_tokens", 0) + usage.get("cache_read_input_tokens", 0)
+                                total_output += usage.get("output_tokens", 0)
+                except OSError:
+                    continue
+
+    return {
+        "date": today,
+        "input": total_input,
+        "output": total_output,
+        "total": total_input + total_output,
+        "sessions": session_count,
+    }
+
+
 def scan_sessions():
     """Find all active Claude Code sessions on this machine."""
     now = time.time()
@@ -411,6 +464,8 @@ def scan_sessions():
 def session_poller():
     """Continuously scan for active sessions and broadcast updates."""
     prev_ids = set()
+    usage_tick = 0
+    USAGE_EVERY = 10  # aggregate daily tokens every 10 polls (~30s)
     while True:
         agents = scan_sessions()
         cur_ids = {a["id"] for a in agents}
@@ -426,6 +481,13 @@ def session_poller():
                 "activeSessions": n,
             }))
             prev_ids = cur_ids
+
+        # Broadcast daily usage every USAGE_EVERY polls
+        usage_tick += 1
+        if usage_tick >= USAGE_EVERY:
+            usage_tick = 0
+            usage = _aggregate_daily_tokens()
+            broadcaster.broadcast("daily_usage", json.dumps(usage))
 
         time.sleep(SESSION_POLL_INTERVAL)
 

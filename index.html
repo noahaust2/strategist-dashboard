@@ -1498,6 +1498,7 @@ svg#main-viz {
   </div>
   <div id="hud-metrics">
     <div class="hud-metric"><span class="hud-metric-value" id="hud-tasks">0</span><span class="hud-metric-label">Tasks/wk</span></div>
+    <div class="hud-metric"><span class="hud-metric-value" id="hud-usage">--</span><span class="hud-metric-label">Tokens today</span></div>
     <div id="connection-status">
       <div id="conn-dot" class="connecting"></div>
       <span id="conn-text">connecting</span>
@@ -3026,6 +3027,18 @@ svg#main-viz {
           }
           updateMissionStatus();
           addFeedEntry('agent_status', 'Agent tree updated (' + state.agents.size + ' agents)');
+        } catch(err) {}
+      });
+
+      eventSource.addEventListener('daily_usage', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          const el = document.getElementById('hud-usage');
+          if (el && typeof data.total === 'number') {
+            const t = data.total;
+            el.textContent = t >= 1e6 ? (t / 1e6).toFixed(1) + 'M' : t >= 1e3 ? (t / 1e3).toFixed(0) + 'K' : String(t);
+            el.title = `Input: ${(data.input/1e6).toFixed(2)}M | Output: ${(data.output/1e6).toFixed(2)}M | Sessions: ${data.sessions}`;
+          }
         } catch(err) {}
       });
 

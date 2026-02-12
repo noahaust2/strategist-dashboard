@@ -1,0 +1,1860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Autonomous Agent Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<style>
+:root {
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #12121a;
+  --bg-tertiary: #1a1a28;
+  --bg-card: #15151f;
+  --border-subtle: #2a2a3a;
+  --border-active: #3a3a5a;
+  --text-primary: #e8e8f0;
+  --text-secondary: #9898b0;
+  --text-muted: #606080;
+  --accent-blue: #4a9eff;
+  --accent-green: #34d399;
+  --accent-amber: #f59e0b;
+  --accent-cyan: #22d3ee;
+  --accent-rose: #f472b6;
+  --accent-violet: #a78bfa;
+  --accent-purple: #8b5cf6;
+  --health-green: #22c55e;
+  --health-yellow: #eab308;
+  --health-red: #ef4444;
+  --sidebar-width: 380px;
+  --glow-blue: 0 0 20px rgba(74,158,255,0.3);
+  --glow-green: 0 0 20px rgba(52,211,153,0.3);
+  --glow-amber: 0 0 20px rgba(245,158,11,0.3);
+  --glow-purple: 0 0 20px rgba(139,92,246,0.3);
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+#canvas-container {
+  position: fixed; inset: 0;
+  z-index: 1;
+}
+
+canvas#bg-canvas {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+}
+
+svg#main-viz {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+}
+
+/* Health indicator - top left */
+#health-indicator {
+  position: fixed; top: 20px; left: 24px;
+  z-index: 100;
+  display: flex; align-items: center; gap: 10px;
+  pointer-events: none;
+}
+
+#health-dot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--health-green);
+  box-shadow: 0 0 12px rgba(34,197,94,0.6);
+  animation: healthPulse 2s ease-in-out infinite;
+}
+
+#health-dot.yellow { background: var(--health-yellow); box-shadow: 0 0 12px rgba(234,179,8,0.6); }
+#health-dot.red { background: var(--health-red); box-shadow: 0 0 12px rgba(239,68,68,0.6); }
+
+@keyframes healthPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(0.85); }
+}
+
+#health-text {
+  font-size: 13px; font-weight: 500;
+  color: var(--text-secondary);
+  text-shadow: 0 0 10px rgba(0,0,0,0.8);
+  letter-spacing: 0.02em;
+}
+
+/* Heartbeat - bottom left */
+#heartbeat-display {
+  position: fixed; bottom: 20px; left: 24px;
+  z-index: 100;
+  font-size: 11px; color: var(--text-muted);
+  font-family: var(--font-mono);
+  pointer-events: none;
+  text-shadow: 0 0 10px rgba(0,0,0,0.8);
+}
+
+/* Zoom level indicator */
+#zoom-indicator {
+  position: fixed; bottom: 20px; right: 24px;
+  z-index: 100;
+  font-size: 11px; color: var(--text-muted);
+  font-family: var(--font-mono);
+  pointer-events: none;
+  opacity: 0; transition: opacity 0.5s;
+  text-shadow: 0 0 10px rgba(0,0,0,0.8);
+}
+#zoom-indicator.visible { opacity: 1; }
+
+/* Sidebar */
+#sidebar {
+  position: fixed; top: 0; right: 0;
+  width: var(--sidebar-width);
+  height: 100vh;
+  z-index: 200;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-subtle);
+  transform: translateX(100%);
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+#sidebar.open { transform: translateX(0); }
+
+/* Sidebar tab strip */
+#sidebar-tabs {
+  position: fixed;
+  top: 50%; right: 0;
+  transform: translateY(-50%);
+  z-index: 201;
+  display: flex; flex-direction: column; gap: 2px;
+}
+
+#sidebar.open ~ #sidebar-tabs { right: var(--sidebar-width); }
+
+.sidebar-tab {
+  width: 36px; height: 44px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.sidebar-tab:hover { background: var(--bg-card); color: var(--text-secondary); }
+.sidebar-tab.active { background: var(--bg-secondary); color: var(--accent-blue); border-color: var(--border-active); }
+
+/* Sidebar panels */
+.sidebar-panel {
+  display: none;
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.sidebar-panel.active { display: block; }
+
+.sidebar-panel::-webkit-scrollbar { width: 4px; }
+.sidebar-panel::-webkit-scrollbar-track { background: transparent; }
+.sidebar-panel::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 2px; }
+
+/* Sidebar header */
+.panel-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Current task card */
+.task-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.task-card .goal-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.task-card .task-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.task-card .task-status {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+/* Key numbers grid */
+.numbers-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.number-cell {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+
+.number-cell .value {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.number-cell .label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Goal progress bars */
+.goal-progress {
+  margin-bottom: 16px;
+}
+
+.goal-progress-item {
+  margin-bottom: 12px;
+}
+
+.goal-progress-item .goal-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.goal-progress-item .goal-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.goal-progress-item .goal-pct {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.progress-track {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-primary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Allocation bar */
+.allocation-bar {
+  display: flex;
+  height: 28px;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.alloc-segment {
+  transition: width 0.5s ease;
+  position: relative;
+}
+
+.alloc-legend {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  margin-bottom: 16px;
+}
+
+.alloc-legend-item {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--text-secondary);
+}
+
+.alloc-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+}
+
+/* Opportunities list */
+.opportunity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.opportunity-item:last-child { border-bottom: none; }
+
+.opp-badge {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.opp-badge.pending { background: rgba(245,158,11,0.15); color: var(--accent-amber); }
+.opp-badge.approved { background: rgba(34,211,153,0.15); color: var(--accent-green); }
+.opp-badge.rejected { background: rgba(239,68,68,0.15); color: var(--health-red); }
+
+.opp-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* Log entries */
+.log-entry {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.log-entry:last-child { border-bottom: none; }
+
+.log-date {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.log-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Alerts */
+.alert-item {
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.2);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.alert-item.critical {
+  background: rgba(239,68,68,0.08);
+  border-color: rgba(239,68,68,0.2);
+}
+
+.alert-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-amber);
+  margin-bottom: 4px;
+}
+
+.alert-item.critical .alert-title { color: var(--health-red); }
+
+.alert-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* Raw files */
+.raw-file {
+  margin-bottom: 12px;
+}
+
+.raw-file summary {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 8px 0;
+  list-style: none;
+  display: flex; align-items: center; gap: 6px;
+}
+
+.raw-file summary::before {
+  content: '\25B6';
+  font-size: 8px;
+  transition: transform 0.2s;
+}
+
+.raw-file[open] summary::before { transform: rotate(90deg); }
+
+.raw-file-content {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Tooltip */
+#tooltip {
+  position: fixed;
+  z-index: 500;
+  background: var(--bg-card);
+  border: 1px solid var(--border-active);
+  border-radius: 8px;
+  padding: 12px 14px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  max-width: 280px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+#tooltip.visible { opacity: 1; }
+
+#tooltip .tt-message {
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+
+#tooltip .tt-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+#tooltip .tt-stats {
+  display: flex; gap: 10px;
+  margin-top: 6px;
+}
+
+#tooltip .tt-stat {
+  font-size: 10px;
+  font-family: var(--font-mono);
+}
+
+#tooltip .tt-stat.add { color: var(--accent-green); }
+#tooltip .tt-stat.del { color: var(--accent-rose); }
+#tooltip .tt-stat.files { color: var(--accent-cyan); }
+
+/* Connection status */
+#connection-status {
+  position: fixed; top: 20px; right: 60px;
+  z-index: 100;
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  pointer-events: none;
+  text-shadow: 0 0 10px rgba(0,0,0,0.8);
+}
+
+#conn-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--health-green);
+}
+
+#conn-dot.disconnected { background: var(--health-red); }
+#conn-dot.connecting { background: var(--health-yellow); animation: healthPulse 1s ease-in-out infinite; }
+
+/* Mobile */
+@media (max-width: 768px) {
+  #sidebar { width: 100vw; }
+  #sidebar.open ~ #sidebar-tabs { right: 100vw; }
+  .numbers-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .number-cell .value { font-size: 18px; }
+}
+
+/* Ambient background animation */
+@keyframes ambientShift {
+  0% { background-position: 0% 0%; }
+  50% { background-position: 100% 100%; }
+  100% { background-position: 0% 0%; }
+}
+
+#canvas-container::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 20% 50%, rgba(74,158,255,0.03) 0%, transparent 50%),
+              radial-gradient(ellipse at 80% 20%, rgba(139,92,246,0.03) 0%, transparent 50%),
+              radial-gradient(ellipse at 50% 80%, rgba(34,211,153,0.02) 0%, transparent 50%);
+  animation: ambientShift 30s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+</style>
+</head>
+<body>
+
+<div id="canvas-container">
+  <canvas id="bg-canvas"></canvas>
+  <svg id="main-viz"></svg>
+</div>
+
+<div id="health-indicator">
+  <div id="health-dot"></div>
+  <span id="health-text">Initializing...</span>
+</div>
+
+<div id="heartbeat-display">Last heartbeat: --</div>
+
+<div id="zoom-indicator">1.0x</div>
+
+<div id="connection-status">
+  <div id="conn-dot" class="connecting"></div>
+  <span id="conn-text">connecting</span>
+</div>
+
+<div id="tooltip">
+  <div class="tt-message"></div>
+  <div class="tt-meta"></div>
+  <div class="tt-stats">
+    <span class="tt-stat add"></span>
+    <span class="tt-stat del"></span>
+    <span class="tt-stat files"></span>
+  </div>
+</div>
+
+<div id="sidebar-tabs">
+  <div class="sidebar-tab active" data-panel="overview" title="Overview">&#9635;</div>
+  <div class="sidebar-tab" data-panel="goals" title="Goals">&#9673;</div>
+  <div class="sidebar-tab" data-panel="daydream" title="Daydream">&#10038;</div>
+  <div class="sidebar-tab" data-panel="logs" title="Logs">&#9776;</div>
+  <div class="sidebar-tab" data-panel="raw" title="Raw Data">&#60;/&#62;</div>
+</div>
+
+<div id="sidebar">
+
+  <!-- Overview Panel -->
+  <div class="sidebar-panel active" id="panel-overview">
+    <div class="panel-header">Current Task</div>
+    <div class="task-card" id="current-task">
+      <div class="goal-badge" id="task-goal-badge" style="background:rgba(74,158,255,0.15);color:var(--accent-blue);">Loading</div>
+      <div class="task-name" id="task-name">Waiting for agent status...</div>
+      <div class="task-status" id="task-status">--</div>
+    </div>
+
+    <div class="panel-header">Key Numbers</div>
+    <div class="numbers-grid" id="numbers-grid">
+      <div class="number-cell"><div class="value" id="num-revenue">$0</div><div class="label">Revenue</div></div>
+      <div class="number-cell"><div class="value" id="num-views">0</div><div class="label">Views</div></div>
+      <div class="number-cell"><div class="value" id="num-tasks">0</div><div class="label">Tasks/Week</div></div>
+      <div class="number-cell"><div class="value" id="num-skills">0</div><div class="label">Skills</div></div>
+      <div class="number-cell" style="grid-column:span 2"><div class="value" id="num-daydream">0%</div><div class="label">Daydream Hit Rate</div></div>
+    </div>
+
+    <div class="panel-header">Alerts</div>
+    <div id="alerts-container">
+      <div style="font-size:12px;color:var(--text-muted);">No alerts</div>
+    </div>
+  </div>
+
+  <!-- Goals Panel -->
+  <div class="sidebar-panel" id="panel-goals">
+    <div class="panel-header">Goal Progress</div>
+    <div class="goal-progress" id="goal-progress-container"></div>
+
+    <div class="panel-header">7-Day Allocation</div>
+    <div class="allocation-bar" id="allocation-bar"></div>
+    <div class="alloc-legend" id="alloc-legend"></div>
+  </div>
+
+  <!-- Daydream Panel -->
+  <div class="sidebar-panel" id="panel-daydream">
+    <div class="panel-header">Cross-Domain Opportunities</div>
+    <div id="opportunities-container">
+      <div style="font-size:12px;color:var(--text-muted);">No opportunities detected</div>
+    </div>
+  </div>
+
+  <!-- Logs Panel -->
+  <div class="sidebar-panel" id="panel-logs">
+    <div class="panel-header">Recent Log</div>
+    <div id="log-container">
+      <div style="font-size:12px;color:var(--text-muted);">No log entries</div>
+    </div>
+  </div>
+
+  <!-- Raw Panel -->
+  <div class="sidebar-panel" id="panel-raw">
+    <div class="panel-header">Raw Files</div>
+    <details class="raw-file">
+      <summary>STATE.md</summary>
+      <div class="raw-file-content" id="raw-state">Loading...</div>
+    </details>
+    <details class="raw-file">
+      <summary>STRATEGY.md</summary>
+      <div class="raw-file-content" id="raw-strategy">Loading...</div>
+    </details>
+    <details class="raw-file">
+      <summary>Security Report</summary>
+      <div class="raw-file-content" id="raw-security">Loading...</div>
+    </details>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// AUTONOMOUS AGENT DASHBOARD - Organic Colony Visualization
+// ============================================================
+
+(function() {
+  'use strict';
+
+  // ----------------------------------------------------------
+  // Configuration & Constants
+  // ----------------------------------------------------------
+  const PALETTE = {
+    blue:  { h: 214, s: 100, base: '#4a9eff', glow: 'rgba(74,158,255,', dim: 'rgba(74,158,255,0.15)' },
+    green: { h: 160, s: 76,  base: '#34d399', glow: 'rgba(52,211,153,', dim: 'rgba(52,211,153,0.15)' },
+    amber: { h: 38,  s: 92,  base: '#f59e0b', glow: 'rgba(245,158,11,', dim: 'rgba(245,158,11,0.15)' },
+    cyan:  { h: 191, s: 82,  base: '#22d3ee', glow: 'rgba(34,211,238,', dim: 'rgba(34,211,238,0.15)' },
+    rose:  { h: 330, s: 86,  base: '#f472b6', glow: 'rgba(244,114,182,', dim: 'rgba(244,114,182,0.15)' },
+  };
+  const PALETTE_KEYS = Object.keys(PALETTE);
+  const COMMIT_TYPES = { research: '#a78bfa', skill: '#f59e0b', state: '#6b7280', feat: '#4a9eff', fix: '#ef4444', refactor: '#22d3ee', docs: '#34d399', chore: '#6b7280' };
+
+  // ----------------------------------------------------------
+  // State
+  // ----------------------------------------------------------
+  const state = {
+    goals: [],
+    colonies: new Map(),
+    particles: [],
+    daydreamLinks: [],
+    activeGoal: null,
+    activeTask: null,
+    health: 'green',
+    statusText: 'Initializing...',
+    lastHeartbeat: null,
+    agentMode: 'active',
+    zoom: 1,
+    pan: { x: 0, y: 0 },
+    width: window.innerWidth,
+    height: window.innerHeight,
+    sidebarOpen: false,
+    activePanel: 'overview',
+    metrics: { revenue: '$0', views: 0, tasksPerWeek: 0, skills: 0, daydreamHitRate: 0 },
+    time: 0,
+    mouse: { x: -1000, y: -1000 },
+    hoveredParticle: null,
+  };
+
+  // ----------------------------------------------------------
+  // Background Canvas (starfield / ambient)
+  // ----------------------------------------------------------
+  const bgCanvas = document.getElementById('bg-canvas');
+  const bgCtx = bgCanvas.getContext('2d');
+  let bgStars = [];
+
+  function initBgCanvas() {
+    bgCanvas.width = state.width * devicePixelRatio;
+    bgCanvas.height = state.height * devicePixelRatio;
+    bgCanvas.style.width = state.width + 'px';
+    bgCanvas.style.height = state.height + 'px';
+    bgCtx.scale(devicePixelRatio, devicePixelRatio);
+
+    bgStars = [];
+    const count = Math.floor((state.width * state.height) / 2000);
+    for (let i = 0; i < count; i++) {
+      bgStars.push({
+        x: Math.random() * state.width,
+        y: Math.random() * state.height,
+        r: Math.random() * 1.2 + 0.2,
+        alpha: Math.random() * 0.4 + 0.05,
+        speed: Math.random() * 0.003 + 0.001,
+        phase: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+
+  function drawBg(t) {
+    bgCtx.clearRect(0, 0, state.width, state.height);
+    bgCtx.fillStyle = '#0a0a0f';
+    bgCtx.fillRect(0, 0, state.width, state.height);
+
+    for (const star of bgStars) {
+      const flicker = Math.sin(t * star.speed + star.phase) * 0.15 + star.alpha;
+      bgCtx.beginPath();
+      bgCtx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+      bgCtx.fillStyle = `rgba(200,200,240,${Math.max(0.02, flicker)})`;
+      bgCtx.fill();
+    }
+  }
+
+  // ----------------------------------------------------------
+  // SVG Setup (D3)
+  // ----------------------------------------------------------
+  const svg = d3.select('#main-viz');
+  const defs = svg.append('defs');
+
+  // Glow filters
+  PALETTE_KEYS.forEach(key => {
+    const filter = defs.append('filter').attr('id', `glow-${key}`).attr('x', '-50%').attr('y', '-50%').attr('width', '200%').attr('height', '200%');
+    filter.append('feGaussianBlur').attr('stdDeviation', '4').attr('result', 'blur');
+    filter.append('feFlood').attr('flood-color', PALETTE[key].base).attr('flood-opacity', '0.4').attr('result', 'color');
+    filter.append('feComposite').attr('in', 'color').attr('in2', 'blur').attr('operator', 'in').attr('result', 'glow');
+    const merge = filter.append('feMerge');
+    merge.append('feMergeNode').attr('in', 'glow');
+    merge.append('feMergeNode').attr('in', 'SourceGraphic');
+  });
+
+  // Purple glow for daydream
+  const purpleFilter = defs.append('filter').attr('id', 'glow-purple').attr('x', '-50%').attr('y', '-50%').attr('width', '200%').attr('height', '200%');
+  purpleFilter.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'blur');
+  purpleFilter.append('feFlood').attr('flood-color', '#8b5cf6').attr('flood-opacity', '0.5').attr('result', 'color');
+  purpleFilter.append('feComposite').attr('in', 'color').attr('in2', 'blur').attr('operator', 'in').attr('result', 'glow');
+  const pMerge = purpleFilter.append('feMerge');
+  pMerge.append('feMergeNode').attr('in', 'glow');
+  pMerge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+  const zoomGroup = svg.append('g').attr('id', 'zoom-group');
+  const linksLayer = zoomGroup.append('g').attr('class', 'links-layer');
+  const coloniesLayer = zoomGroup.append('g').attr('class', 'colonies-layer');
+  const particlesLayer = zoomGroup.append('g').attr('class', 'particles-layer');
+  const daydreamLayer = zoomGroup.append('g').attr('class', 'daydream-layer');
+
+  // ----------------------------------------------------------
+  // Zoom Behavior
+  // ----------------------------------------------------------
+  const zoomBehavior = d3.zoom()
+    .scaleExtent([0.2, 5])
+    .on('zoom', (event) => {
+      state.zoom = event.transform.k;
+      state.pan.x = event.transform.x;
+      state.pan.y = event.transform.y;
+      zoomGroup.attr('transform', event.transform);
+      updateZoomIndicator();
+    });
+
+  svg.call(zoomBehavior);
+
+  function updateZoomIndicator() {
+    const el = document.getElementById('zoom-indicator');
+    el.textContent = state.zoom.toFixed(1) + 'x';
+    el.classList.add('visible');
+    clearTimeout(el._timeout);
+    el._timeout = setTimeout(() => el.classList.remove('visible'), 2000);
+  }
+
+  // ----------------------------------------------------------
+  // Colony & Particle Data Structures
+  // ----------------------------------------------------------
+  class Colony {
+    constructor(goal, colorKey, cx, cy) {
+      this.id = goal.id || goal.name;
+      this.goal = goal;
+      this.colorKey = colorKey;
+      this.color = PALETTE[colorKey];
+      this.cx = cx;
+      this.cy = cy;
+      this.radius = 80;
+      this.particles = [];
+      this.active = false;
+      this.breathPhase = Math.random() * Math.PI * 2;
+      this.breathSpeed = 0.008 + Math.random() * 0.004;
+    }
+  }
+
+  class Particle {
+    constructor(commit, colony) {
+      this.id = commit.hash || commit.id || Math.random().toString(36).slice(2);
+      this.commit = commit;
+      this.colony = colony;
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * colony.radius * 0.7;
+      this.x = colony.cx + Math.cos(angle) * dist;
+      this.y = colony.cy + Math.sin(angle) * dist;
+      this.vx = (Math.random() - 0.5) * 0.3;
+      this.vy = (Math.random() - 0.5) * 0.3;
+      this.baseRadius = Math.min(8, 2.5 + (commit.filesChanged || 1) * 0.8);
+      this.radius = this.baseRadius;
+      this.age = commit.age || 0;
+      this.brightness = Math.max(0.3, 1 - this.age * 0.01);
+      this.type = commit.type || 'chore';
+      this.isActive = commit.isActive || false;
+      this.phase = Math.random() * Math.PI * 2;
+      this.spawnTime = state.time;
+    }
+  }
+
+  // ----------------------------------------------------------
+  // Colony Layout
+  // ----------------------------------------------------------
+  function layoutColonies() {
+    const goals = state.goals;
+    if (goals.length === 0) return;
+
+    const cx = state.width / 2;
+    const cy = state.height / 2;
+    const ringRadius = Math.min(state.width, state.height) * 0.28;
+
+    goals.forEach((goal, i) => {
+      const angle = (i / goals.length) * Math.PI * 2 - Math.PI / 2;
+      const x = cx + Math.cos(angle) * ringRadius;
+      const y = cy + Math.sin(angle) * ringRadius;
+      const colorKey = PALETTE_KEYS[i % PALETTE_KEYS.length];
+
+      if (!state.colonies.has(goal.id)) {
+        state.colonies.set(goal.id, new Colony(goal, colorKey, x, y));
+      } else {
+        const c = state.colonies.get(goal.id);
+        c.cx = x;
+        c.cy = y;
+      }
+    });
+  }
+
+  // ----------------------------------------------------------
+  // Particle Physics
+  // ----------------------------------------------------------
+  function updatePhysics() {
+    state.time++;
+    const modeMultiplier = state.agentMode === 'rate_limited' ? 0.15
+                         : state.agentMode === 'stagnating' ? 0.02
+                         : state.agentMode === 'rest' ? 0.3
+                         : 1;
+
+    state.colonies.forEach(colony => {
+      colony.breathPhase += colony.breathSpeed * modeMultiplier;
+      const breath = Math.sin(colony.breathPhase) * 0.04;
+      const effectiveRadius = colony.radius * (1 + breath);
+
+      colony.particles.forEach(p => {
+        // Attract toward colony center
+        const dx = colony.cx - p.x;
+        const dy = colony.cy - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist > effectiveRadius) {
+          p.vx += (dx / dist) * 0.05;
+          p.vy += (dy / dist) * 0.05;
+        }
+
+        // Gentle orbital drift
+        p.vx += (-dy / (dist + 10)) * 0.002 * modeMultiplier;
+        p.vy += (dx / (dist + 10)) * 0.002 * modeMultiplier;
+
+        // Repulsion from other particles
+        colony.particles.forEach(other => {
+          if (other === p) return;
+          const pdx = p.x - other.x;
+          const pdy = p.y - other.y;
+          const pd = Math.sqrt(pdx * pdx + pdy * pdy);
+          if (pd < 20 && pd > 0) {
+            const force = (20 - pd) / 20 * 0.1;
+            p.vx += (pdx / pd) * force;
+            p.vy += (pdy / pd) * force;
+          }
+        });
+
+        // Damping
+        p.vx *= 0.95;
+        p.vy *= 0.95;
+
+        // Apply
+        p.x += p.vx * modeMultiplier;
+        p.y += p.vy * modeMultiplier;
+
+        // Pulse active particles
+        if (p.isActive && colony.active) {
+          p.radius = p.baseRadius * (1.4 + Math.sin(state.time * 0.05) * 0.2);
+        } else {
+          p.radius = p.baseRadius;
+        }
+
+        // Brightness fade for stagnation
+        if (state.agentMode === 'stagnating') {
+          p.brightness = Math.max(0.15, p.brightness * 0.999);
+        }
+      });
+    });
+  }
+
+  // ----------------------------------------------------------
+  // Rendering
+  // ----------------------------------------------------------
+  function render() {
+    // Colony backgrounds (halos)
+    const colonyData = Array.from(state.colonies.values());
+    const colonyHalos = coloniesLayer.selectAll('.colony-halo').data(colonyData, d => d.id);
+
+    colonyHalos.enter()
+      .append('circle')
+      .attr('class', 'colony-halo')
+      .merge(colonyHalos)
+      .attr('cx', d => d.cx)
+      .attr('cy', d => d.cy)
+      .attr('r', d => d.radius + 20 + Math.sin(d.breathPhase) * 5)
+      .attr('fill', 'none')
+      .attr('stroke', d => d.color.glow + (d.active ? '0.2)' : '0.07)'))
+      .attr('stroke-width', d => d.active ? 2 : 1)
+      .attr('filter', d => d.active ? `url(#glow-${d.colorKey})` : 'none');
+
+    colonyHalos.exit().remove();
+
+    // Colony labels (far zoom shows blobs, mid/close shows labels)
+    const labelData = state.zoom > 0.4 ? colonyData : [];
+    const labels = coloniesLayer.selectAll('.colony-label').data(labelData, d => d.id);
+
+    labels.enter()
+      .append('text')
+      .attr('class', 'colony-label')
+      .attr('text-anchor', 'middle')
+      .attr('fill', d => d.color.base)
+      .attr('font-family', 'var(--font-sans)')
+      .attr('font-weight', '600')
+      .attr('opacity', 0.6)
+      .merge(labels)
+      .attr('x', d => d.cx)
+      .attr('y', d => d.cy + d.radius + 36)
+      .attr('font-size', d => Math.max(10, 13 / state.zoom))
+      .text(d => d.goal.name || d.id);
+
+    labels.exit().remove();
+
+    // Particles
+    const allParticles = [];
+    state.colonies.forEach(c => c.particles.forEach(p => allParticles.push(p)));
+
+    // Particle groups
+    const pGroups = particlesLayer.selectAll('.particle-g').data(allParticles, d => d.id);
+
+    const entering = pGroups.enter()
+      .append('g')
+      .attr('class', 'particle-g')
+      .style('cursor', 'pointer')
+      .on('mouseenter', function(event, d) { showTooltip(event, d); })
+      .on('mousemove', function(event, d) { moveTooltip(event); })
+      .on('mouseleave', function() { hideTooltip(); });
+
+    // Main circle
+    entering.append('circle')
+      .attr('class', 'p-body');
+
+    // Type ring (visible at close zoom)
+    entering.append('circle')
+      .attr('class', 'p-ring');
+
+    const merged = entering.merge(pGroups);
+
+    merged.attr('transform', d => `translate(${d.x},${d.y})`);
+
+    merged.select('.p-body')
+      .attr('r', d => d.radius)
+      .attr('fill', d => {
+        const c = d.colony.color;
+        const b = d.brightness * (d.colony.active ? 1 : 0.5);
+        return c.glow + b + ')';
+      })
+      .attr('stroke', d => d.isActive && d.colony.active ? d.colony.color.base : 'none')
+      .attr('stroke-width', d => d.isActive ? 2 : 0)
+      .attr('filter', d => d.isActive && d.colony.active ? `url(#glow-${d.colony.colorKey})` : 'none');
+
+    // Type ring visibility based on zoom
+    merged.select('.p-ring')
+      .attr('r', d => d.radius + 2.5)
+      .attr('fill', 'none')
+      .attr('stroke', d => COMMIT_TYPES[d.type] || '#6b7280')
+      .attr('stroke-width', 1.5)
+      .attr('opacity', state.zoom > 1.5 ? 0.7 : 0);
+
+    pGroups.exit()
+      .transition().duration(500)
+      .attr('opacity', 0)
+      .remove();
+
+    // Daydream connections
+    const linkData = state.daydreamLinks;
+    const links = daydreamLayer.selectAll('.daydream-link').data(linkData, d => d.id);
+
+    links.enter()
+      .append('line')
+      .attr('class', 'daydream-link')
+      .merge(links)
+      .attr('x1', d => d.source.x)
+      .attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x)
+      .attr('y2', d => d.target.y)
+      .attr('stroke', '#8b5cf6')
+      .attr('stroke-width', d => d.hit ? 1.5 : 0.8)
+      .attr('stroke-opacity', d => d.hit ? 0.5 + Math.sin(state.time * 0.03) * 0.2 : 0.15)
+      .attr('stroke-dasharray', d => d.hit ? 'none' : '4,6')
+      .attr('filter', d => d.hit ? 'url(#glow-purple)' : 'none');
+
+    links.exit().remove();
+
+    // Daydream midpoint nodes (opportunities)
+    const midpoints = linkData.filter(d => d.opportunity);
+    const midDots = daydreamLayer.selectAll('.daydream-mid').data(midpoints, d => d.id);
+
+    midDots.enter()
+      .append('circle')
+      .attr('class', 'daydream-mid')
+      .merge(midDots)
+      .attr('cx', d => (d.source.x + d.target.x) / 2)
+      .attr('cy', d => (d.source.y + d.target.y) / 2)
+      .attr('r', 4)
+      .attr('fill', '#8b5cf6')
+      .attr('opacity', 0.6 + Math.sin(state.time * 0.04) * 0.3)
+      .attr('filter', 'url(#glow-purple)');
+
+    midDots.exit().remove();
+  }
+
+  // ----------------------------------------------------------
+  // Tooltip
+  // ----------------------------------------------------------
+  const tooltipEl = document.getElementById('tooltip');
+
+  function showTooltip(event, d) {
+    state.hoveredParticle = d;
+    const tt = tooltipEl;
+    tt.querySelector('.tt-message').textContent = d.commit.message || 'No message';
+    tt.querySelector('.tt-meta').textContent = d.commit.timestamp || '--';
+    tt.querySelector('.tt-stat.add').textContent = '+' + (d.commit.additions || 0);
+    tt.querySelector('.tt-stat.del').textContent = '-' + (d.commit.deletions || 0);
+    tt.querySelector('.tt-stat.files').textContent = (d.commit.filesChanged || 0) + ' files';
+    tt.classList.add('visible');
+    moveTooltip(event);
+  }
+
+  function moveTooltip(event) {
+    const tt = tooltipEl;
+    let x = event.clientX + 14;
+    let y = event.clientY + 14;
+    if (x + 280 > state.width) x = event.clientX - 294;
+    if (y + 120 > state.height) y = event.clientY - 130;
+    tt.style.left = x + 'px';
+    tt.style.top = y + 'px';
+  }
+
+  function hideTooltip() {
+    state.hoveredParticle = null;
+    tooltipEl.classList.remove('visible');
+  }
+
+  // ----------------------------------------------------------
+  // Sidebar Logic
+  // ----------------------------------------------------------
+  document.querySelectorAll('.sidebar-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const panel = tab.dataset.panel;
+      const wasActive = tab.classList.contains('active') && state.sidebarOpen;
+
+      document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('active'));
+
+      if (wasActive) {
+        state.sidebarOpen = false;
+        document.getElementById('sidebar').classList.remove('open');
+      } else {
+        tab.classList.add('active');
+        document.getElementById(`panel-${panel}`).classList.add('active');
+        state.sidebarOpen = true;
+        state.activePanel = panel;
+        document.getElementById('sidebar').classList.add('open');
+      }
+    });
+  });
+
+  // ----------------------------------------------------------
+  // Sidebar Rendering
+  // ----------------------------------------------------------
+  function updateSidebarOverview() {
+    if (state.activeTask) {
+      const t = state.activeTask;
+      const colony = state.colonies.get(t.goalId);
+      const badge = document.getElementById('task-goal-badge');
+      if (colony) {
+        badge.style.background = colony.color.dim;
+        badge.style.color = colony.color.base;
+      }
+      badge.textContent = t.goalName || t.goalId || 'Agent';
+      document.getElementById('task-name').textContent = t.name || 'Working...';
+      document.getElementById('task-status').textContent = t.status || 'active';
+    }
+
+    document.getElementById('num-revenue').textContent = state.metrics.revenue;
+    document.getElementById('num-views').textContent = formatNumber(state.metrics.views);
+    document.getElementById('num-tasks').textContent = state.metrics.tasksPerWeek;
+    document.getElementById('num-skills').textContent = state.metrics.skills;
+    document.getElementById('num-daydream').textContent = state.metrics.daydreamHitRate + '%';
+  }
+
+  function updateGoalsPanel() {
+    const container = document.getElementById('goal-progress-container');
+    container.innerHTML = '';
+
+    state.goals.forEach((goal, i) => {
+      const colorKey = PALETTE_KEYS[i % PALETTE_KEYS.length];
+      const color = PALETTE[colorKey];
+      const pct = goal.progress || 0;
+
+      const item = document.createElement('div');
+      item.className = 'goal-progress-item';
+      item.innerHTML = `
+        <div class="goal-label">
+          <span class="goal-name">${escapeHtml(goal.name)}</span>
+          <span class="goal-pct">${pct}%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" style="width:${pct}%;background:${color.base}"></div>
+        </div>
+      `;
+      container.appendChild(item);
+    });
+
+    // Allocation bar
+    const bar = document.getElementById('allocation-bar');
+    const legend = document.getElementById('alloc-legend');
+    bar.innerHTML = '';
+    legend.innerHTML = '';
+
+    const total = state.goals.reduce((s, g) => s + (g.commits7d || 1), 0);
+    state.goals.forEach((goal, i) => {
+      const colorKey = PALETTE_KEYS[i % PALETTE_KEYS.length];
+      const pct = ((goal.commits7d || 1) / total) * 100;
+      const seg = document.createElement('div');
+      seg.className = 'alloc-segment';
+      seg.style.width = pct + '%';
+      seg.style.background = PALETTE[colorKey].base;
+      bar.appendChild(seg);
+
+      const li = document.createElement('div');
+      li.className = 'alloc-legend-item';
+      li.innerHTML = `<span class="alloc-dot" style="background:${PALETTE[colorKey].base}"></span>${escapeHtml(goal.name)}`;
+      legend.appendChild(li);
+    });
+  }
+
+  function updateOpportunities(opportunities) {
+    const container = document.getElementById('opportunities-container');
+    if (!opportunities || opportunities.length === 0) {
+      container.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">No opportunities detected</div>';
+      return;
+    }
+    container.innerHTML = '';
+    opportunities.forEach(opp => {
+      const item = document.createElement('div');
+      item.className = 'opportunity-item';
+      const badgeClass = opp.status === 'pending' ? 'pending' : opp.status === 'approved' ? 'approved' : 'rejected';
+      item.innerHTML = `
+        <span class="opp-badge ${badgeClass}">${escapeHtml(opp.status || 'pending')}</span>
+        <span class="opp-text">${escapeHtml(opp.description || opp.text || '')}</span>
+      `;
+      container.appendChild(item);
+    });
+  }
+
+  function updateLogs(logs) {
+    const container = document.getElementById('log-container');
+    if (!logs || logs.length === 0) {
+      container.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">No log entries</div>';
+      return;
+    }
+    container.innerHTML = '';
+    logs.slice(0, 5).forEach(log => {
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = `
+        <div class="log-date">${escapeHtml(log.date || '')}</div>
+        <div class="log-text">${escapeHtml(log.text || log.content || '')}</div>
+      `;
+      container.appendChild(entry);
+    });
+  }
+
+  function updateAlerts(alerts) {
+    const container = document.getElementById('alerts-container');
+    if (!alerts || alerts.length === 0) {
+      container.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">No alerts</div>';
+      return;
+    }
+    container.innerHTML = '';
+    alerts.forEach(alert => {
+      const item = document.createElement('div');
+      item.className = 'alert-item' + (alert.critical ? ' critical' : '');
+      item.innerHTML = `
+        <div class="alert-title">${escapeHtml(alert.title || 'Alert')}</div>
+        <div class="alert-desc">${escapeHtml(alert.description || '')}</div>
+      `;
+      container.appendChild(item);
+    });
+  }
+
+  // ----------------------------------------------------------
+  // SSE Connection
+  // ----------------------------------------------------------
+  let sseRetryDelay = 1000;
+  let sseRetryMax = 30000;
+  let eventSource = null;
+
+  function connectSSE() {
+    const connDot = document.getElementById('conn-dot');
+    const connText = document.getElementById('conn-text');
+
+    connDot.className = 'connecting';
+    connText.textContent = 'connecting';
+
+    try {
+      eventSource = new EventSource('/api/stream');
+
+      eventSource.onopen = () => {
+        sseRetryDelay = 1000;
+        connDot.className = '';
+        connText.textContent = 'connected';
+      };
+
+      eventSource.onerror = () => {
+        eventSource.close();
+        connDot.className = 'disconnected';
+        connText.textContent = 'reconnecting';
+        setTimeout(connectSSE, sseRetryDelay);
+        sseRetryDelay = Math.min(sseRetryDelay * 1.5, sseRetryMax);
+      };
+
+      // SSE event handlers
+      eventSource.addEventListener('agent_status', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          handleAgentStatus(data);
+        } catch(err) { console.warn('SSE parse error:', err); }
+      });
+
+      eventSource.addEventListener('stagnation', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          state.agentMode = 'stagnating';
+          state.health = 'yellow';
+          state.statusText = data.message || 'Stagnation detected';
+          updateHealthUI();
+        } catch(err) {}
+      });
+
+      eventSource.addEventListener('heartbeat', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          state.lastHeartbeat = data.timestamp || new Date().toISOString();
+          document.getElementById('heartbeat-display').textContent = 'Last heartbeat: ' + formatTime(state.lastHeartbeat);
+        } catch(err) {}
+      });
+
+      eventSource.addEventListener('git_activity', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          handleGitActivity(data);
+        } catch(err) {}
+      });
+
+      eventSource.addEventListener('daydream', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          handleDaydream(data);
+        } catch(err) {}
+      });
+
+      eventSource.addEventListener('opportunities', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          updateOpportunities(data.items || data);
+        } catch(err) {}
+      });
+
+      eventSource.addEventListener('metrics', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          Object.assign(state.metrics, data);
+          updateSidebarOverview();
+        } catch(err) {}
+      });
+
+      eventSource.addEventListener('state', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          document.getElementById('raw-state').textContent = data.content || JSON.stringify(data, null, 2);
+        } catch(err) {}
+      });
+
+      eventSource.addEventListener('log', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          updateLogs(data.entries || [data]);
+        } catch(err) {}
+      });
+
+      eventSource.addEventListener('strategy', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          document.getElementById('raw-strategy').textContent = data.content || JSON.stringify(data, null, 2);
+        } catch(err) {}
+      });
+
+      // Generic message handler
+      eventSource.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.type) {
+            handleGenericEvent(data);
+          }
+        } catch(err) {}
+      };
+
+    } catch (err) {
+      connDot.className = 'disconnected';
+      connText.textContent = 'error';
+      setTimeout(connectSSE, sseRetryDelay);
+      sseRetryDelay = Math.min(sseRetryDelay * 1.5, sseRetryMax);
+    }
+  }
+
+  // ----------------------------------------------------------
+  // Event Handlers
+  // ----------------------------------------------------------
+  function handleAgentStatus(data) {
+    state.agentMode = data.mode || 'active';
+    state.health = data.health || 'green';
+    state.statusText = data.status || modeLabel(state.agentMode);
+
+    if (data.activeGoal) {
+      state.activeGoal = data.activeGoal;
+      state.colonies.forEach(c => { c.active = (c.id === data.activeGoal); });
+    }
+
+    if (data.activeTask) {
+      state.activeTask = data.activeTask;
+    }
+
+    updateHealthUI();
+    updateSidebarOverview();
+  }
+
+  function handleGitActivity(data) {
+    const commits = Array.isArray(data) ? data : data.commits || [data];
+    commits.forEach(commit => {
+      const goalId = commit.goalId || commit.goal;
+      const colony = state.colonies.get(goalId);
+      if (!colony) return;
+
+      const particle = new Particle(commit, colony);
+      colony.particles.push(particle);
+      colony.radius = Math.min(180, 60 + colony.particles.length * 1.5);
+    });
+  }
+
+  function handleDaydream(data) {
+    const links = data.links || data.connections || [];
+    links.forEach(link => {
+      const sourceColony = state.colonies.get(link.sourceGoal || link.from);
+      const targetColony = state.colonies.get(link.targetGoal || link.to);
+      if (!sourceColony || !targetColony) return;
+
+      const sourceP = sourceColony.particles[Math.floor(Math.random() * sourceColony.particles.length)];
+      const targetP = targetColony.particles[Math.floor(Math.random() * targetColony.particles.length)];
+      if (!sourceP || !targetP) return;
+
+      state.daydreamLinks.push({
+        id: link.id || Math.random().toString(36).slice(2),
+        source: sourceP,
+        target: targetP,
+        hit: link.hit || false,
+        opportunity: link.opportunity || false,
+      });
+    });
+
+    // Cap link count
+    if (state.daydreamLinks.length > 100) {
+      state.daydreamLinks = state.daydreamLinks.slice(-80);
+    }
+  }
+
+  function handleGenericEvent(data) {
+    switch(data.type) {
+      case 'agent_status': handleAgentStatus(data); break;
+      case 'git_activity': handleGitActivity(data); break;
+      case 'daydream': handleDaydream(data); break;
+      case 'heartbeat':
+        state.lastHeartbeat = data.timestamp || new Date().toISOString();
+        document.getElementById('heartbeat-display').textContent = 'Last heartbeat: ' + formatTime(state.lastHeartbeat);
+        break;
+      case 'metrics':
+        Object.assign(state.metrics, data);
+        updateSidebarOverview();
+        break;
+    }
+  }
+
+  // ----------------------------------------------------------
+  // API Initial Loads
+  // ----------------------------------------------------------
+  async function loadInitialData() {
+    const endpoints = [
+      { url: '/api/state', handler: handleStateResponse },
+      { url: '/api/git', handler: handleGitResponse },
+      { url: '/api/daydream', handler: handleDaydreamResponse },
+      { url: '/api/security', handler: handleSecurityResponse },
+    ];
+
+    for (const ep of endpoints) {
+      try {
+        const res = await fetch(ep.url);
+        if (res.ok) {
+          const data = await res.json();
+          ep.handler(data);
+        }
+      } catch (err) {
+        console.log(`API ${ep.url} not available, using demo data`);
+      }
+    }
+
+    // If no goals loaded from API, seed demo data
+    if (state.goals.length === 0) {
+      seedDemoData();
+    }
+
+    layoutColonies();
+    updateSidebarOverview();
+    updateGoalsPanel();
+  }
+
+  function handleStateResponse(data) {
+    if (data.goals) {
+      state.goals = data.goals;
+    }
+    if (data.health) state.health = data.health;
+    if (data.status) state.statusText = data.status;
+    if (data.mode) state.agentMode = data.mode;
+    if (data.activeGoal) state.activeGoal = data.activeGoal;
+    if (data.activeTask) state.activeTask = data.activeTask;
+    if (data.metrics) Object.assign(state.metrics, data.metrics);
+    if (data.logs) updateLogs(data.logs);
+    if (data.alerts) updateAlerts(data.alerts);
+    if (data.raw) {
+      if (data.raw.state) document.getElementById('raw-state').textContent = data.raw.state;
+      if (data.raw.strategy) document.getElementById('raw-strategy').textContent = data.raw.strategy;
+    }
+    updateHealthUI();
+  }
+
+  function handleGitResponse(data) {
+    const commits = data.commits || data;
+    if (!Array.isArray(commits)) return;
+    handleGitActivity(commits);
+  }
+
+  function handleDaydreamResponse(data) {
+    if (data.links || data.connections) {
+      handleDaydream(data);
+    }
+    if (data.opportunities) {
+      updateOpportunities(data.opportunities);
+    }
+  }
+
+  function handleSecurityResponse(data) {
+    document.getElementById('raw-security').textContent = data.content || JSON.stringify(data, null, 2);
+  }
+
+  // ----------------------------------------------------------
+  // Demo Data (when API is unavailable)
+  // ----------------------------------------------------------
+  function seedDemoData() {
+    state.goals = [
+      { id: 'revenue', name: 'Revenue Generation', progress: 34, commits7d: 18 },
+      { id: 'audience', name: 'Audience Growth', progress: 52, commits7d: 24 },
+      { id: 'skills', name: 'Skill Acquisition', progress: 68, commits7d: 12 },
+      { id: 'infrastructure', name: 'Infrastructure', progress: 81, commits7d: 31 },
+      { id: 'research', name: 'Research & Exploration', progress: 22, commits7d: 8 },
+    ];
+
+    state.activeGoal = 'audience';
+    state.agentMode = 'active';
+    state.health = 'green';
+    state.statusText = 'Active - writing content pipeline';
+    state.lastHeartbeat = new Date().toISOString();
+    state.metrics = {
+      revenue: '$1,247',
+      views: 14832,
+      tasksPerWeek: 47,
+      skills: 12,
+      daydreamHitRate: 23,
+    };
+    state.activeTask = {
+      goalId: 'audience',
+      goalName: 'Audience Growth',
+      name: 'Generate blog post on cross-domain AI applications',
+      status: 'writing draft',
+    };
+
+    layoutColonies();
+
+    // Seed particles
+    const commitTypes = ['feat', 'fix', 'refactor', 'docs', 'research', 'skill', 'state', 'chore'];
+    const messages = [
+      'Add RSS feed parser for content aggregation',
+      'Fix authentication token refresh logic',
+      'Implement A/B testing framework for headlines',
+      'Research vector embedding strategies',
+      'Update skill tree with new SEO capabilities',
+      'Refactor content pipeline for parallel processing',
+      'Add analytics tracking to landing pages',
+      'Fix rate limiter edge case on burst traffic',
+      'Document API endpoints for content service',
+      'Implement cross-domain linking for daydream module',
+      'Add monitoring alerts for revenue thresholds',
+      'Optimize database queries for audience metrics',
+      'Build automated social media posting pipeline',
+      'Research competitor content strategies',
+      'Implement retry logic for external API calls',
+      'Add error handling for payment webhook processing',
+      'Update infrastructure terraform modules',
+      'Refactor state management for goal tracking',
+      'Fix timezone bug in scheduling system',
+      'Add skill assessment benchmarking suite',
+    ];
+
+    state.goals.forEach(goal => {
+      const colony = state.colonies.get(goal.id);
+      if (!colony) return;
+      colony.active = (goal.id === state.activeGoal);
+
+      const numParticles = 8 + Math.floor(Math.random() * 15);
+      for (let i = 0; i < numParticles; i++) {
+        const commit = {
+          hash: Math.random().toString(36).slice(2, 9),
+          message: messages[Math.floor(Math.random() * messages.length)],
+          timestamp: new Date(Date.now() - Math.random() * 7 * 86400000).toISOString(),
+          type: commitTypes[Math.floor(Math.random() * commitTypes.length)],
+          filesChanged: Math.floor(Math.random() * 8) + 1,
+          additions: Math.floor(Math.random() * 200),
+          deletions: Math.floor(Math.random() * 80),
+          age: Math.floor(Math.random() * 60),
+          isActive: false,
+        };
+        // Make one particle in the active colony the active task
+        if (colony.active && i === numParticles - 1) {
+          commit.isActive = true;
+          commit.message = state.activeTask.name;
+          commit.age = 0;
+        }
+        const particle = new Particle(commit, colony);
+        colony.particles.push(particle);
+      }
+
+      colony.radius = Math.min(160, 60 + colony.particles.length * 1.5);
+    });
+
+    // Seed daydream links
+    const colonyArr = Array.from(state.colonies.values());
+    for (let i = 0; i < 6; i++) {
+      const ci = Math.floor(Math.random() * colonyArr.length);
+      let cj = Math.floor(Math.random() * colonyArr.length);
+      if (ci === cj) cj = (ci + 1) % colonyArr.length;
+      const src = colonyArr[ci];
+      const tgt = colonyArr[cj];
+      if (src.particles.length === 0 || tgt.particles.length === 0) continue;
+      const sp = src.particles[Math.floor(Math.random() * src.particles.length)];
+      const tp = tgt.particles[Math.floor(Math.random() * tgt.particles.length)];
+      state.daydreamLinks.push({
+        id: 'dd-' + i,
+        source: sp,
+        target: tp,
+        hit: Math.random() > 0.5,
+        opportunity: Math.random() > 0.6,
+      });
+    }
+
+    // Seed sidebar data
+    updateAlerts([
+      { title: 'Pending Approval', description: 'Cross-domain content opportunity: link revenue SEO insights to audience growth blog posts', critical: false },
+      { title: 'Stagnation Warning', description: 'Research goal has had no commits in 48 hours', critical: false },
+    ]);
+
+    updateLogs([
+      { date: '2026-02-12', text: 'Published blog post on AI-assisted content creation. Engagement metrics look promising with 340 views in first hour.' },
+      { date: '2026-02-11', text: 'Completed infrastructure migration to edge workers. Latency reduced by 62%. Revenue endpoints now respond in <50ms.' },
+      { date: '2026-02-10', text: 'Daydream module identified cross-domain opportunity: research findings on embeddings can improve audience content recommendations.' },
+    ]);
+
+    updateOpportunities([
+      { status: 'pending', description: 'Apply revenue optimization insights to audience targeting algorithm' },
+      { status: 'approved', description: 'Use infrastructure caching layer for research data retrieval' },
+      { status: 'pending', description: 'Cross-pollinate skill assessment metrics into content quality scoring' },
+    ]);
+
+    document.getElementById('raw-state').textContent = `# Agent State
+Mode: active
+Health: green
+Current Goal: audience
+Current Task: Generate blog post on cross-domain AI applications
+Uptime: 72h 14m
+Goals: 5 active
+Commits (7d): 93
+Daydream Links: 14 active (6 hits, 8 misses)`;
+
+    document.getElementById('raw-strategy').textContent = `# Strategy
+## Priority Order
+1. Audience Growth (high momentum, capitalize)
+2. Infrastructure (stability enables all goals)
+3. Revenue Generation (needs audience base first)
+4. Skill Acquisition (ongoing background)
+5. Research (explore when idle)
+
+## Current Focus
+Content pipeline producing 2-3 posts/day.
+A/B testing headlines for CTR optimization.
+Cross-domain insights feeding content topics.`;
+
+    document.getElementById('raw-security').textContent = `# Security Report
+Last scan: 2026-02-12T08:00:00Z
+Status: CLEAN
+
+Dependencies: 0 critical, 1 moderate
+API Keys: rotated 2026-02-10
+Rate Limits: active, no violations
+Auth: tokens refreshed, no anomalies`;
+  }
+
+  // ----------------------------------------------------------
+  // UI Updates
+  // ----------------------------------------------------------
+  function updateHealthUI() {
+    const dot = document.getElementById('health-dot');
+    dot.className = state.health === 'green' ? '' : state.health;
+    document.getElementById('health-text').textContent = state.statusText;
+  }
+
+  function modeLabel(mode) {
+    switch(mode) {
+      case 'active': return 'Active';
+      case 'rate_limited': return 'Rate Limited';
+      case 'stagnating': return 'Stagnation Detected';
+      case 'rest': return 'Rest Window';
+      default: return mode;
+    }
+  }
+
+  // ----------------------------------------------------------
+  // Helpers
+  // ----------------------------------------------------------
+  function formatNumber(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return String(n);
+  }
+
+  function formatTime(iso) {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    } catch { return iso; }
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ----------------------------------------------------------
+  // Animation Loop
+  // ----------------------------------------------------------
+  let lastRender = 0;
+  const TARGET_FPS = 60;
+  const FRAME_TIME = 1000 / TARGET_FPS;
+
+  function animate(timestamp) {
+    requestAnimationFrame(animate);
+
+    if (timestamp - lastRender < FRAME_TIME) return;
+    lastRender = timestamp;
+
+    drawBg(timestamp * 0.001);
+    updatePhysics();
+    render();
+  }
+
+  // ----------------------------------------------------------
+  // Responsive
+  // ----------------------------------------------------------
+  function onResize() {
+    state.width = window.innerWidth;
+    state.height = window.innerHeight;
+    initBgCanvas();
+    layoutColonies();
+  }
+
+  window.addEventListener('resize', debounce(onResize, 200));
+
+  function debounce(fn, ms) {
+    let timer;
+    return function(...args) {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn.apply(this, args), ms);
+    };
+  }
+
+  // Mobile swipe to open sidebar
+  let touchStartX = 0;
+  document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; });
+  document.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if (dx < -80 && touchStartX > state.width * 0.6 && !state.sidebarOpen) {
+      document.querySelector('.sidebar-tab.active')?.click();
+      if (!state.sidebarOpen) {
+        document.querySelector('.sidebar-tab')?.click();
+      }
+    } else if (dx > 80 && state.sidebarOpen) {
+      state.sidebarOpen = false;
+      document.getElementById('sidebar').classList.remove('open');
+    }
+  });
+
+  // ----------------------------------------------------------
+  // Periodic Heartbeat Check
+  // ----------------------------------------------------------
+  setInterval(() => {
+    if (state.lastHeartbeat) {
+      const elapsed = (Date.now() - new Date(state.lastHeartbeat).getTime()) / 1000;
+      if (elapsed > 300) {
+        state.health = 'red';
+        state.statusText = 'No heartbeat - agent may be down';
+        updateHealthUI();
+      } else if (elapsed > 120) {
+        state.health = 'yellow';
+        state.statusText = 'Heartbeat delayed';
+        updateHealthUI();
+      }
+    }
+  }, 10000);
+
+  // Periodic demo heartbeat (for demo mode)
+  setInterval(() => {
+    if (state.goals.length > 0 && !eventSource?.OPEN) {
+      state.lastHeartbeat = new Date().toISOString();
+      document.getElementById('heartbeat-display').textContent = 'Last heartbeat: ' + formatTime(state.lastHeartbeat);
+    }
+  }, 15000);
+
+  // ----------------------------------------------------------
+  // Dynamic Particle Spawning (demo mode animation)
+  // ----------------------------------------------------------
+  function demoSpawnParticle() {
+    if (state.goals.length === 0) return;
+    const colonyArr = Array.from(state.colonies.values());
+    // Prefer active colony
+    const active = colonyArr.find(c => c.active) || colonyArr[0];
+    const target = Math.random() > 0.6 ? active : colonyArr[Math.floor(Math.random() * colonyArr.length)];
+
+    const types = ['feat', 'fix', 'refactor', 'docs', 'research', 'skill'];
+    const msgs = [
+      'Optimize content delivery pipeline',
+      'Fix edge case in audience segmentation',
+      'Add new skill: advanced prompt engineering',
+      'Research emerging monetization strategies',
+      'Refactor state sync for reliability',
+      'Update analytics tracking events',
+      'Implement A/B test for landing page CTA',
+      'Add error recovery for failed API calls',
+    ];
+
+    const commit = {
+      hash: Math.random().toString(36).slice(2, 9),
+      message: msgs[Math.floor(Math.random() * msgs.length)],
+      timestamp: new Date().toISOString(),
+      type: types[Math.floor(Math.random() * types.length)],
+      filesChanged: Math.floor(Math.random() * 6) + 1,
+      additions: Math.floor(Math.random() * 150),
+      deletions: Math.floor(Math.random() * 50),
+      age: 0,
+      isActive: false,
+    };
+
+    const particle = new Particle(commit, target);
+    target.particles.push(particle);
+
+    // Keep colonies from growing unbounded
+    if (target.particles.length > 40) {
+      target.particles.shift();
+    }
+    target.radius = Math.min(160, 60 + target.particles.length * 1.5);
+  }
+
+  // Spawn a new particle every 8-15 seconds in demo mode
+  setInterval(() => {
+    if (!eventSource?.OPEN) {
+      demoSpawnParticle();
+    }
+  }, 8000 + Math.random() * 7000);
+
+  // ----------------------------------------------------------
+  // Boot
+  // ----------------------------------------------------------
+  function boot() {
+    initBgCanvas();
+    loadInitialData().then(() => {
+      updateHealthUI();
+      updateGoalsPanel();
+      requestAnimationFrame(animate);
+      connectSSE();
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+
+})();
+</script>
+</body>
+</html>

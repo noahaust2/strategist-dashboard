@@ -668,6 +668,226 @@ svg#main-viz {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Context Meter (HUD) */
+#hud-context {
+  display: flex; align-items: center; gap: 8px;
+  min-width: 140px;
+  flex-shrink: 0;
+}
+
+.context-bar {
+  display: flex;
+  width: 100px; height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+}
+
+.ctx-segment { height: 100%; transition: width 0.6s ease; }
+.ctx-system { background: var(--accent-cyan); }
+.ctx-conversation { background: var(--accent-blue); }
+.ctx-tools { background: var(--accent-amber); }
+.ctx-thinking { background: var(--accent-purple); }
+
+.context-label {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Agent Tree Nodes */
+.agent-node-bg { transition: all 0.3s ease; }
+.agent-node-ring { fill: none; stroke-width: 2; transition: all 0.3s ease; }
+
+.agent-node-label {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.agent-node-action {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.agent-node-tool-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  text-anchor: middle;
+}
+
+.agent-link-line { stroke-width: 1.5; fill: none; }
+.agent-data-particle { pointer-events: none; }
+
+/* Phase Indicator */
+.phase-track {
+  display: flex; gap: 2px;
+  margin-bottom: 16px;
+  background: var(--bg-primary);
+  border-radius: 6px;
+  padding: 4px;
+  border: 1px solid var(--border-subtle);
+}
+
+.phase-step {
+  flex: 1;
+  text-align: center;
+  padding: 6px 4px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  transition: all 0.3s;
+}
+
+.phase-step.done { background: rgba(52,211,153,0.12); color: var(--accent-green); }
+.phase-step.active { background: rgba(74,158,255,0.15); color: var(--accent-blue); box-shadow: inset 0 0 10px rgba(74,158,255,0.1); }
+.phase-step.pending { opacity: 0.4; }
+
+/* Tool Call Items */
+.tool-call-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(42,42,58,0.5);
+}
+.tool-call-item:last-child { border-bottom: none; }
+
+.tool-agent-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+.tool-name {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--accent-cyan);
+  min-width: 60px;
+  flex-shrink: 0;
+}
+
+.tool-target {
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  flex: 1;
+}
+
+.tool-status {
+  font-size: 9px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 2px 6px; border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.tool-status.done { background: rgba(52,211,153,0.12); color: var(--accent-green); }
+.tool-status.running { background: rgba(74,158,255,0.12); color: var(--accent-blue); animation: toolPulse 1.5s ease-in-out infinite; }
+.tool-status.error { background: rgba(239,68,68,0.12); color: var(--health-red); }
+
+@keyframes toolPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.tool-duration {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  min-width: 40px; text-align: right;
+  flex-shrink: 0;
+}
+
+/* Thinking Steps */
+.thinking-step {
+  display: flex; gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(42,42,58,0.5);
+}
+.thinking-step:last-child { border-bottom: none; }
+
+.thinking-phase {
+  font-size: 9px; font-weight: 700;
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+  padding: 2px 6px; border-radius: 3px;
+  white-space: nowrap;
+  height: fit-content; margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.thinking-phase.read { background: rgba(34,211,238,0.12); color: var(--accent-cyan); }
+.thinking-phase.decide { background: rgba(245,158,11,0.12); color: var(--accent-amber); }
+.thinking-phase.execute { background: rgba(74,158,255,0.12); color: var(--accent-blue); }
+.thinking-phase.verify { background: rgba(52,211,153,0.12); color: var(--accent-green); }
+
+.thinking-content { flex: 1; }
+.thinking-text { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+.thinking-time { font-size: 10px; font-family: var(--font-mono); color: var(--text-muted); margin-top: 2px; }
+.thinking-step.active .thinking-text { color: var(--text-primary); }
+
+/* Agent Cards (Process panel) */
+.agent-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.agent-card-header {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 8px;
+}
+
+.agent-card-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.agent-card-name { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.agent-card-status { font-size: 10px; font-family: var(--font-mono); color: var(--text-muted); margin-left: auto; }
+.agent-card-action { font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; }
+.agent-card-tokens { font-size: 10px; font-family: var(--font-mono); color: var(--text-muted); }
+
+.agent-card-bar {
+  height: 4px;
+  background: var(--bg-primary);
+  border-radius: 2px;
+  overflow: hidden; margin-top: 6px;
+}
+
+.agent-card-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+
+/* Context detail (sidebar) */
+.context-detail {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
+}
+
+.ctx-legend-item {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 10px; color: var(--text-muted);
+}
+
+.ctx-legend-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+.context-bar-large {
+  display: flex;
+  width: 100%; height: 14px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: 6px;
+}
+
+.context-pct {
+  font-size: 13px; font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
 /* Mobile */
 @media (max-width: 768px) {
   #sidebar { width: 100vw; }
@@ -712,6 +932,15 @@ svg#main-viz {
     <div class="hud-dot" id="hud-health-dot"></div>
     <span class="hud-status-text" id="hud-status-text">Initializing...</span>
   </div>
+  <div id="hud-context">
+    <div class="context-bar">
+      <div class="ctx-segment ctx-system" id="ctx-system"></div>
+      <div class="ctx-segment ctx-conversation" id="ctx-conversation"></div>
+      <div class="ctx-segment ctx-tools" id="ctx-tools"></div>
+      <div class="ctx-segment ctx-thinking" id="ctx-thinking"></div>
+    </div>
+    <span class="context-label" id="ctx-label">0K / 200K</span>
+  </div>
   <div id="hud-task">
     <span class="hud-goal-badge" id="hud-goal-badge">Agent</span>
     <span class="hud-task-name" id="hud-task-name">Waiting for status...</span>
@@ -751,6 +980,8 @@ svg#main-viz {
 
 <div id="sidebar-tabs">
   <div class="sidebar-tab active" data-panel="overview" title="Overview">&#9635;</div>
+  <div class="sidebar-tab" data-panel="process" title="Process">&#9881;</div>
+  <div class="sidebar-tab" data-panel="thinking" title="Thinking">&#9733;</div>
   <div class="sidebar-tab" data-panel="goals" title="Goals">&#9673;</div>
   <div class="sidebar-tab" data-panel="daydream" title="Daydream">&#10038;</div>
   <div class="sidebar-tab" data-panel="logs" title="Logs">&#9776;</div>
@@ -774,6 +1005,44 @@ svg#main-viz {
 
     <div class="panel-header" style="margin-top:20px;">Heartbeat</div>
     <div id="heartbeat-display" style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">Last heartbeat: --</div>
+  </div>
+
+  <!-- Process Panel -->
+  <div class="sidebar-panel" id="panel-process">
+    <div class="panel-header">Agent Loop Phase</div>
+    <div class="phase-track" id="phase-track">
+      <div class="phase-step pending" data-phase="read">READ</div>
+      <div class="phase-step pending" data-phase="decide">DECIDE</div>
+      <div class="phase-step pending" data-phase="execute">EXEC</div>
+      <div class="phase-step pending" data-phase="verify">VERIFY</div>
+    </div>
+
+    <div class="panel-header">Context Window</div>
+    <div class="context-pct" id="ctx-pct">0%</div>
+    <div class="context-bar-large" id="ctx-bar-large">
+      <div class="ctx-segment ctx-system" id="ctx-lg-system"></div>
+      <div class="ctx-segment ctx-conversation" id="ctx-lg-conversation"></div>
+      <div class="ctx-segment ctx-tools" id="ctx-lg-tools"></div>
+      <div class="ctx-segment ctx-thinking" id="ctx-lg-thinking"></div>
+    </div>
+    <div class="context-detail" id="ctx-detail">
+      <span class="ctx-legend-item"><span class="ctx-legend-dot" style="background:var(--accent-cyan)"></span>System</span>
+      <span class="ctx-legend-item"><span class="ctx-legend-dot" style="background:var(--accent-blue)"></span>Convo</span>
+      <span class="ctx-legend-item"><span class="ctx-legend-dot" style="background:var(--accent-amber)"></span>Tools</span>
+      <span class="ctx-legend-item"><span class="ctx-legend-dot" style="background:var(--accent-purple)"></span>Think</span>
+    </div>
+
+    <div class="panel-header" style="margin-top:16px;">Active Agents</div>
+    <div id="agent-cards-container"></div>
+
+    <div class="panel-header" style="margin-top:16px;">Tool Calls</div>
+    <div id="tool-calls-container"></div>
+  </div>
+
+  <!-- Thinking Panel -->
+  <div class="sidebar-panel" id="panel-thinking">
+    <div class="panel-header">Decision Flow</div>
+    <div id="thinking-container"></div>
   </div>
 
   <!-- Goals Panel -->
@@ -865,6 +1134,13 @@ svg#main-viz {
     time: 0,
     mouse: { x: -1000, y: -1000 },
     hoveredParticle: null,
+    // Agent tree & process
+    agents: new Map(),
+    context: { max: 200000, system: 0, conversation: 0, tools: 0, thinking: 0 },
+    toolCalls: [],
+    thinkingSteps: [],
+    agentPhase: 'read',
+    dataParticles: [],
   };
 
   // ----------------------------------------------------------
@@ -940,6 +1216,7 @@ svg#main-viz {
   const coloniesLayer = zoomGroup.append('g').attr('class', 'colonies-layer');
   const particlesLayer = zoomGroup.append('g').attr('class', 'particles-layer');
   const daydreamLayer = zoomGroup.append('g').attr('class', 'daydream-layer');
+  const agentTreeLayer = zoomGroup.append('g').attr('class', 'agent-tree-layer');
 
   // ----------------------------------------------------------
   // Zoom Behavior
@@ -1416,6 +1693,301 @@ svg#main-viz {
   }
 
   // ----------------------------------------------------------
+  // Agent Tree Rendering
+  // ----------------------------------------------------------
+  const AGENT_COLORS = ['blue', 'green', 'amber', 'cyan', 'rose'];
+
+  function layoutAgentTree() {
+    const agents = Array.from(state.agents.values());
+    if (agents.length === 0) return;
+
+    const cx = state.width / 2;
+    const cy = state.height / 2;
+
+    const root = agents.find(a => !a.parent);
+    if (!root) return;
+    root.x = cx;
+    root.y = cy;
+    root.nodeRadius = 30;
+
+    const children = agents.filter(a => a.parent === root.id);
+    const childRing = Math.min(140, state.width * 0.1);
+    children.forEach((child, i) => {
+      const angle = (i / Math.max(children.length, 1)) * Math.PI * 2 - Math.PI / 2;
+      child.x = cx + Math.cos(angle) * childRing;
+      child.y = cy + Math.sin(angle) * childRing;
+      child.nodeRadius = 22;
+
+      const grandchildren = agents.filter(a => a.parent === child.id);
+      grandchildren.forEach((gc, j) => {
+        const gcAngle = angle + (j - (grandchildren.length - 1) / 2) * 0.6;
+        gc.x = child.x + Math.cos(gcAngle) * 80;
+        gc.y = child.y + Math.sin(gcAngle) * 80;
+        gc.nodeRadius = 16;
+      });
+    });
+  }
+
+  function renderAgentTree() {
+    const agents = Array.from(state.agents.values());
+    if (agents.length === 0) {
+      agentTreeLayer.selectAll('*').remove();
+      return;
+    }
+
+    layoutAgentTree();
+
+    // Links
+    const linkData = agents.filter(a => a.parent && state.agents.has(a.parent)).map(a => ({
+      source: state.agents.get(a.parent),
+      target: a,
+      id: a.id + '-link',
+    }));
+
+    const links = agentTreeLayer.selectAll('.agent-link-line').data(linkData, d => d.id);
+    links.enter().append('line').attr('class', 'agent-link-line')
+      .merge(links)
+      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x).attr('y2', d => d.target.y)
+      .attr('stroke', d => {
+        const ck = AGENT_COLORS[agents.indexOf(d.target) % AGENT_COLORS.length];
+        return PALETTE[ck].glow + '0.25)';
+      })
+      .attr('stroke-dasharray', d => d.target.status === 'done' ? 'none' : '6,4');
+    links.exit().remove();
+
+    // Data particles flowing along links
+    updateDataParticles(linkData);
+    const dpData = state.dataParticles;
+    const dps = agentTreeLayer.selectAll('.agent-data-particle').data(dpData, d => d.id);
+    dps.enter().append('circle').attr('class', 'agent-data-particle').attr('r', 2.5)
+      .merge(dps)
+      .attr('cx', d => d.source.x + (d.target.x - d.source.x) * d.t)
+      .attr('cy', d => d.source.y + (d.target.y - d.source.y) * d.t)
+      .attr('fill', d => {
+        const ck = AGENT_COLORS[agents.indexOf(d.target) % AGENT_COLORS.length];
+        return PALETTE[ck] ? PALETTE[ck].base : '#4a9eff';
+      })
+      .attr('opacity', d => 0.6 + Math.sin(d.t * Math.PI) * 0.4);
+    dps.exit().remove();
+
+    // Agent nodes
+    const nodeGroups = agentTreeLayer.selectAll('.agent-node-g').data(agents, d => d.id);
+
+    const entering = nodeGroups.enter().append('g').attr('class', 'agent-node-g');
+    entering.append('circle').attr('class', 'agent-node-bg');
+    entering.append('circle').attr('class', 'agent-node-ring');
+    entering.append('text').attr('class', 'agent-node-label');
+    entering.append('text').attr('class', 'agent-node-action');
+    entering.append('rect').attr('class', 'agent-tool-bg');
+    entering.append('text').attr('class', 'agent-node-tool-badge');
+
+    const merged = entering.merge(nodeGroups);
+    merged.attr('transform', d => `translate(${d.x},${d.y})`);
+
+    merged.select('.agent-node-bg')
+      .attr('r', d => d.nodeRadius + 8)
+      .attr('fill', d => {
+        const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
+        return PALETTE[ck].glow + '0.06)';
+      })
+      .attr('filter', d => {
+        const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
+        return d.status === 'active' ? `url(#glow-${ck})` : 'none';
+      });
+
+    merged.select('.agent-node-ring')
+      .attr('r', d => d.nodeRadius)
+      .attr('stroke', d => {
+        const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
+        return PALETTE[ck].base;
+      })
+      .attr('stroke-opacity', d => d.status === 'active' ? 0.8 : 0.3)
+      .attr('fill', d => {
+        const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
+        return PALETTE[ck].glow + (d.status === 'active' ? '0.15)' : '0.05)');
+      });
+
+    merged.select('.agent-node-label')
+      .attr('y', d => d.nodeRadius + 18)
+      .attr('fill', d => {
+        const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
+        return PALETTE[ck].base;
+      })
+      .attr('font-size', d => d.nodeRadius > 24 ? 12 : 10)
+      .attr('opacity', 0.8)
+      .text(d => d.label);
+
+    merged.select('.agent-node-action')
+      .attr('y', d => d.nodeRadius + 32)
+      .attr('fill', 'var(--text-muted)')
+      .attr('opacity', state.zoom > 0.6 ? 0.7 : 0)
+      .text(d => truncate(d.currentAction || '', 30));
+
+    // Tool badge
+    merged.select('.agent-tool-bg')
+      .attr('x', -16).attr('y', d => -d.nodeRadius - 16)
+      .attr('width', 32).attr('height', 14)
+      .attr('rx', 3)
+      .attr('fill', d => d.currentTool ? 'var(--bg-card)' : 'none')
+      .attr('stroke', d => d.currentTool ? 'var(--border-subtle)' : 'none')
+      .attr('stroke-width', 0.5);
+
+    merged.select('.agent-node-tool-badge')
+      .attr('y', d => -d.nodeRadius - 6)
+      .attr('fill', 'var(--accent-cyan)')
+      .text(d => d.currentTool || '');
+
+    nodeGroups.exit().transition().duration(500).attr('opacity', 0).remove();
+  }
+
+  function updateDataParticles(linkData) {
+    // Spawn new particles occasionally
+    if (state.time % 20 === 0) {
+      linkData.forEach(link => {
+        if (link.target.status === 'active' && Math.random() > 0.5) {
+          state.dataParticles.push({
+            id: 'dp-' + Math.random().toString(36).slice(2),
+            source: link.source,
+            target: link.target,
+            t: 0,
+            speed: 0.015 + Math.random() * 0.01,
+          });
+        }
+      });
+    }
+    // Advance and cull
+    state.dataParticles.forEach(dp => { dp.t += dp.speed; });
+    state.dataParticles = state.dataParticles.filter(dp => dp.t < 1);
+  }
+
+  function truncate(s, n) { return s.length > n ? s.slice(0, n) + '...' : s; }
+
+  // ----------------------------------------------------------
+  // Context Meter
+  // ----------------------------------------------------------
+  function updateContextMeter() {
+    const ctx = state.context;
+    const total = ctx.system + ctx.conversation + ctx.tools + ctx.thinking;
+    const max = ctx.max;
+    const pct = (v) => (v / max * 100).toFixed(1) + '%';
+
+    // HUD compact bar
+    document.getElementById('ctx-system').style.width = pct(ctx.system);
+    document.getElementById('ctx-conversation').style.width = pct(ctx.conversation);
+    document.getElementById('ctx-tools').style.width = pct(ctx.tools);
+    document.getElementById('ctx-thinking').style.width = pct(ctx.thinking);
+    document.getElementById('ctx-label').textContent = Math.round(total / 1000) + 'K / ' + Math.round(max / 1000) + 'K';
+
+    // Sidebar large bar
+    const lg = (id, v) => { const el = document.getElementById(id); if (el) el.style.width = pct(v); };
+    lg('ctx-lg-system', ctx.system);
+    lg('ctx-lg-conversation', ctx.conversation);
+    lg('ctx-lg-tools', ctx.tools);
+    lg('ctx-lg-thinking', ctx.thinking);
+
+    const pctEl = document.getElementById('ctx-pct');
+    if (pctEl) pctEl.textContent = Math.round(total / max * 100) + '% — ' + Math.round(total / 1000) + 'K tokens';
+  }
+
+  // ----------------------------------------------------------
+  // Process Panel
+  // ----------------------------------------------------------
+  function updatePhaseIndicator() {
+    const phases = ['read', 'decide', 'execute', 'verify'];
+    const currentIdx = phases.indexOf(state.agentPhase);
+    document.querySelectorAll('#phase-track .phase-step').forEach(el => {
+      const phase = el.dataset.phase;
+      const idx = phases.indexOf(phase);
+      el.className = 'phase-step ' + (idx < currentIdx ? 'done' : idx === currentIdx ? 'active' : 'pending');
+    });
+  }
+
+  function updateAgentCards() {
+    const container = document.getElementById('agent-cards-container');
+    if (!container) return;
+    const agents = Array.from(state.agents.values());
+    if (agents.length === 0) {
+      container.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">No agents active</div>';
+      return;
+    }
+    container.innerHTML = '';
+    agents.forEach((agent, i) => {
+      const ck = AGENT_COLORS[i % AGENT_COLORS.length];
+      const color = PALETTE[ck];
+      const tokenPct = agent.tokens ? Math.round(agent.tokens.total / state.context.max * 100) : 0;
+      const card = document.createElement('div');
+      card.className = 'agent-card';
+      card.innerHTML = `
+        <div class="agent-card-header">
+          <span class="agent-card-dot" style="background:${color.base}"></span>
+          <span class="agent-card-name">${escapeHtml(agent.label)}</span>
+          <span class="agent-card-status">${escapeHtml(agent.status)}</span>
+        </div>
+        <div class="agent-card-action">${escapeHtml(agent.currentTool ? agent.currentTool + ' → ' : '')}${escapeHtml(agent.currentAction || 'Idle')}</div>
+        <div class="agent-card-tokens">${agent.tokens ? Math.round(agent.tokens.total / 1000) + 'K tokens' : '--'}</div>
+        <div class="agent-card-bar"><div class="agent-card-fill" style="width:${tokenPct}%;background:${color.base}"></div></div>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  function updateToolCalls() {
+    const container = document.getElementById('tool-calls-container');
+    if (!container) return;
+    const calls = state.toolCalls;
+    if (calls.length === 0) {
+      container.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">No tool calls</div>';
+      return;
+    }
+    container.innerHTML = '';
+    // Show most recent first
+    calls.slice().reverse().slice(0, 20).forEach(tc => {
+      const agent = state.agents.get(tc.agent);
+      const agentIdx = Array.from(state.agents.keys()).indexOf(tc.agent);
+      const ck = AGENT_COLORS[Math.max(0, agentIdx) % AGENT_COLORS.length];
+      const color = PALETTE[ck] || PALETTE.blue;
+      const item = document.createElement('div');
+      item.className = 'tool-call-item';
+      item.innerHTML = `
+        <span class="tool-agent-dot" style="background:${color.base}"></span>
+        <span class="tool-name">${escapeHtml(tc.tool)}</span>
+        <span class="tool-target">${escapeHtml(tc.target || '')}</span>
+        <span class="tool-status ${tc.status}">${tc.status}</span>
+        <span class="tool-duration">${tc.duration ? tc.duration + 'ms' : '...'}</span>
+      `;
+      container.appendChild(item);
+    });
+  }
+
+  // ----------------------------------------------------------
+  // Thinking Panel
+  // ----------------------------------------------------------
+  function updateThinkingPanel() {
+    const container = document.getElementById('thinking-container');
+    if (!container) return;
+    const steps = state.thinkingSteps;
+    if (steps.length === 0) {
+      container.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">No thinking data yet</div>';
+      return;
+    }
+    container.innerHTML = '';
+    steps.forEach(step => {
+      const el = document.createElement('div');
+      el.className = 'thinking-step' + (step.status === 'active' ? ' active' : '');
+      el.innerHTML = `
+        <span class="thinking-phase ${step.phase.toLowerCase()}">${escapeHtml(step.phase)}</span>
+        <div class="thinking-content">
+          <div class="thinking-text">${escapeHtml(step.text)}</div>
+          <div class="thinking-time">${escapeHtml(step.time || '')}</div>
+        </div>
+      `;
+      container.appendChild(el);
+    });
+    container.scrollTop = container.scrollHeight;
+  }
+
+  // ----------------------------------------------------------
   // SSE Connection
   // ----------------------------------------------------------
   let sseRetryDelay = 1000;
@@ -1534,6 +2106,59 @@ svg#main-viz {
           const data = JSON.parse(e.data);
           document.getElementById('raw-strategy').textContent = data.content || JSON.stringify(data, null, 2);
           addFeedEntry('strategy', 'Strategy updated');
+        } catch(err) {}
+      });
+
+      eventSource.addEventListener('context_usage', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          Object.assign(state.context, data);
+          updateContextMeter();
+        } catch(err) {}
+      });
+
+      eventSource.addEventListener('agent_tree', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.agents) {
+            state.agents.clear();
+            data.agents.forEach(a => state.agents.set(a.id, a));
+            layoutAgentTree();
+            updateAgentCards();
+          }
+          if (data.phase) {
+            state.agentPhase = data.phase;
+            updatePhaseIndicator();
+          }
+          addFeedEntry('agent_status', 'Agent tree updated (' + state.agents.size + ' agents)');
+        } catch(err) {}
+      });
+
+      eventSource.addEventListener('tool_call', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.id) {
+            const existing = state.toolCalls.find(tc => tc.id === data.id);
+            if (existing) Object.assign(existing, data);
+            else state.toolCalls.push(data);
+          }
+          if (state.toolCalls.length > 30) state.toolCalls = state.toolCalls.slice(-25);
+          updateToolCalls();
+        } catch(err) {}
+      });
+
+      eventSource.addEventListener('thinking', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          state.thinkingSteps.forEach(s => { if (s.status === 'active') s.status = 'done'; });
+          state.thinkingSteps.push({
+            phase: data.phase || 'EXECUTE',
+            text: data.text || '',
+            status: 'active',
+            time: data.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          });
+          if (state.thinkingSteps.length > 20) state.thinkingSteps = state.thinkingSteps.slice(-15);
+          updateThinkingPanel();
         } catch(err) {}
       });
 
@@ -1863,6 +2488,88 @@ API Keys: rotated 2026-02-10
 Rate Limits: active, no violations
 Auth: tokens refreshed, no anomalies`;
 
+    // Seed agent tree
+    state.agents.set('strategist', {
+      id: 'strategist', label: 'Strategist', parent: null,
+      status: 'active', currentTool: 'Task',
+      currentAction: 'Coordinating content pipeline',
+      tokens: { input: 45200, output: 12800, total: 58000 },
+      x: 0, y: 0, nodeRadius: 30,
+    });
+    state.agents.set('content-writer', {
+      id: 'content-writer', label: 'Content Writer', parent: 'strategist',
+      status: 'active', currentTool: 'Write',
+      currentAction: 'Drafting blog post on AI applications',
+      tokens: { input: 22000, output: 8500, total: 30500 },
+      x: 0, y: 0, nodeRadius: 22,
+    });
+    state.agents.set('research-scout', {
+      id: 'research-scout', label: 'Research Scout', parent: 'strategist',
+      status: 'active', currentTool: 'WebSearch',
+      currentAction: 'Searching competitor strategies',
+      tokens: { input: 15000, output: 4200, total: 19200 },
+      x: 0, y: 0, nodeRadius: 22,
+    });
+    state.agents.set('deep-researcher', {
+      id: 'deep-researcher', label: 'Deep Researcher', parent: 'research-scout',
+      status: 'active', currentTool: 'Read',
+      currentAction: 'Reading embedding analysis paper',
+      tokens: { input: 8000, output: 2100, total: 10100 },
+      x: 0, y: 0, nodeRadius: 16,
+    });
+
+    // Seed context usage
+    state.context = {
+      max: 200000,
+      system: 12400,
+      conversation: 34800,
+      tools: 28600,
+      thinking: 18200,
+    };
+
+    // Seed agent phase
+    state.agentPhase = 'execute';
+
+    // Seed tool calls
+    state.toolCalls = [
+      { id: 1, agent: 'strategist', tool: 'Read', target: 'STATE.md', status: 'done', duration: 120 },
+      { id: 2, agent: 'strategist', tool: 'Read', target: 'GOALS.md', status: 'done', duration: 85 },
+      { id: 3, agent: 'strategist', tool: 'Read', target: 'METRICS.md', status: 'done', duration: 92 },
+      { id: 4, agent: 'strategist', tool: 'Read', target: 'OPPORTUNITIES.md', status: 'done', duration: 78 },
+      { id: 5, agent: 'strategist', tool: 'Task', target: 'Content Writer', status: 'running', duration: null },
+      { id: 6, agent: 'content-writer', tool: 'WebSearch', target: 'AI content trends 2026', status: 'done', duration: 3200 },
+      { id: 7, agent: 'content-writer', tool: 'Read', target: 'research/content-strategy.md', status: 'done', duration: 140 },
+      { id: 8, agent: 'content-writer', tool: 'Write', target: 'blog-post-draft.md', status: 'running', duration: null },
+      { id: 9, agent: 'strategist', tool: 'Task', target: 'Research Scout', status: 'running', duration: null },
+      { id: 10, agent: 'research-scout', tool: 'WebSearch', target: 'competitor content strategies', status: 'done', duration: 2800 },
+      { id: 11, agent: 'research-scout', tool: 'Task', target: 'Deep Researcher', status: 'running', duration: null },
+      { id: 12, agent: 'deep-researcher', tool: 'Read', target: 'research/embedding-analysis.md', status: 'running', duration: null },
+    ];
+
+    // Seed thinking steps
+    const now = new Date();
+    const fmt = (offset) => new Date(now.getTime() - offset * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    state.thinkingSteps = [
+      { phase: 'READ', text: 'Reading STATE.md, GOALS.md, METRICS.md, OPPORTUNITIES.md', status: 'done', time: fmt(120) },
+      { phase: 'READ', text: 'Checking trigger files: no daily log, no curation trigger', status: 'done', time: fmt(118) },
+      { phase: 'READ', text: 'Checking Telegram inbox: no new messages', status: 'done', time: fmt(116) },
+      { phase: 'READ', text: 'Rate budget check: 72% remaining, no limits hit', status: 'done', time: fmt(114) },
+      { phase: 'DECIDE', text: 'Evaluating goals \u2014 Audience Growth has high momentum (52%), 24 commits in 7d', status: 'done', time: fmt(110) },
+      { phase: 'DECIDE', text: 'Revenue needs audience base first. Infrastructure stable at 81%. Research stale (48h).', status: 'done', time: fmt(108) },
+      { phase: 'DECIDE', text: 'Selected: Audience Growth \u2014 capitalize on momentum, 2 more posts needed today', status: 'done', time: fmt(105) },
+      { phase: 'EXECUTE', text: 'Spawning Content Writer teammate for blog post generation', status: 'done', time: fmt(100) },
+      { phase: 'EXECUTE', text: 'Spawning Research Scout to find trending topics for tomorrow', status: 'done', time: fmt(95) },
+      { phase: 'EXECUTE', text: 'Monitoring \u2014 Content Writer drafting, Research Scout spawned Deep Researcher', status: 'active', time: fmt(30) },
+    ];
+
+    // Render new panels
+    layoutAgentTree();
+    updateContextMeter();
+    updatePhaseIndicator();
+    updateAgentCards();
+    updateToolCalls();
+    updateThinkingPanel();
+
     // Seed activity feed
     addFeedEntry('system', 'Dashboard initialized (demo mode)');
     addFeedEntry('agent_status', 'Agent: Active \u2014 writing content pipeline');
@@ -1985,6 +2692,7 @@ Auth: tokens refreshed, no anomalies`;
     drawBg(timestamp * 0.001);
     updatePhysics();
     render();
+    renderAgentTree();
   }
 
   // ----------------------------------------------------------
@@ -2103,6 +2811,128 @@ Auth: tokens refreshed, no anomalies`;
       demoSpawnParticle();
     }
   }, 8000 + Math.random() * 7000);
+
+  // ----------------------------------------------------------
+  // Demo: Context growth, tool spawning, thinking progression
+  // ----------------------------------------------------------
+  let demoToolId = 100;
+  const demoTools = ['Read', 'Grep', 'Write', 'Edit', 'Bash', 'WebSearch', 'Glob', 'Task'];
+  const demoTargets = [
+    'STATE.md', 'METRICS.md', 'content/draft-3.md', 'skills/seo.md',
+    'npm test', 'AI monetization 2026', '**/*.md', 'research/trends.md',
+    'STRATEGY.md', 'analytics/report.js', 'git status', 'audience segmentation',
+  ];
+  const demoThinkingTexts = [
+    { phase: 'EXECUTE', text: 'Content Writer completed first draft \u2014 checking quality score' },
+    { phase: 'EXECUTE', text: 'Research Scout found 3 trending topics for tomorrow\u2019s content' },
+    { phase: 'EXECUTE', text: 'Deep Researcher identified embedding approach for recommendations' },
+    { phase: 'VERIFY', text: 'Reviewing teammate outputs \u2014 blog post meets quality threshold' },
+    { phase: 'VERIFY', text: 'Updating STATE.md with execution results' },
+    { phase: 'VERIFY', text: 'Committing changes: feat(audience): publish blog post on AI applications' },
+    { phase: 'READ', text: 'Starting new cycle \u2014 reading STATE.md, checking triggers' },
+    { phase: 'DECIDE', text: 'Evaluating next goal \u2014 Research stale 50h, may need attention' },
+  ];
+  let demoThinkingIdx = 0;
+  const demoPhases = ['read', 'decide', 'execute', 'verify'];
+  let demoPhaseIdx = 2; // start at execute
+
+  // Grow context every 5s
+  setInterval(() => {
+    if (eventSource?.OPEN) return;
+    const ctx = state.context;
+    ctx.conversation += Math.floor(Math.random() * 800 + 200);
+    ctx.tools += Math.floor(Math.random() * 600 + 100);
+    ctx.thinking += Math.floor(Math.random() * 400 + 50);
+
+    const total = ctx.system + ctx.conversation + ctx.tools + ctx.thinking;
+    if (total > ctx.max * 0.92) {
+      // Simulate context compression
+      ctx.conversation = Math.floor(ctx.conversation * 0.6);
+      ctx.tools = Math.floor(ctx.tools * 0.5);
+      ctx.thinking = Math.floor(ctx.thinking * 0.5);
+      addFeedEntry('system', 'Context compressed \u2014 ' + Math.round((ctx.system + ctx.conversation + ctx.tools + ctx.thinking) / 1000) + 'K tokens');
+    }
+    updateContextMeter();
+  }, 5000);
+
+  // Spawn tool call every 4-8s
+  setInterval(() => {
+    if (eventSource?.OPEN) return;
+    const agents = Array.from(state.agents.keys());
+    if (agents.length === 0) return;
+
+    const agentId = agents[Math.floor(Math.random() * agents.length)];
+    const tool = demoTools[Math.floor(Math.random() * demoTools.length)];
+    const target = demoTargets[Math.floor(Math.random() * demoTargets.length)];
+
+    // Complete a running tool call
+    const running = state.toolCalls.find(tc => tc.status === 'running' && tc.agent === agentId);
+    if (running) {
+      running.status = 'done';
+      running.duration = Math.floor(Math.random() * 3000 + 80);
+    }
+
+    state.toolCalls.push({
+      id: demoToolId++,
+      agent: agentId,
+      tool: tool,
+      target: target,
+      status: 'running',
+      duration: null,
+    });
+
+    // Cap at 30
+    if (state.toolCalls.length > 30) state.toolCalls = state.toolCalls.slice(-25);
+    updateToolCalls();
+    addFeedEntry('git', agentId + ' \u2192 ' + tool + '(' + target + ')');
+  }, 4000 + Math.random() * 4000);
+
+  // Add thinking step every 12s
+  setInterval(() => {
+    if (eventSource?.OPEN) return;
+    const step = demoThinkingTexts[demoThinkingIdx % demoThinkingTexts.length];
+    demoThinkingIdx++;
+
+    // Mark previous active as done
+    state.thinkingSteps.forEach(s => { if (s.status === 'active') s.status = 'done'; });
+
+    const now = new Date();
+    state.thinkingSteps.push({
+      phase: step.phase,
+      text: step.text,
+      status: 'active',
+      time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    });
+
+    // Cap at 20
+    if (state.thinkingSteps.length > 20) state.thinkingSteps = state.thinkingSteps.slice(-15);
+    updateThinkingPanel();
+  }, 12000);
+
+  // Cycle agent phase every 30s
+  setInterval(() => {
+    if (eventSource?.OPEN) return;
+    demoPhaseIdx = (demoPhaseIdx + 1) % demoPhases.length;
+    state.agentPhase = demoPhases[demoPhaseIdx];
+    updatePhaseIndicator();
+    addFeedEntry('agent_status', 'Phase: ' + state.agentPhase.toUpperCase());
+  }, 30000);
+
+  // Occasionally change agent tool/action
+  setInterval(() => {
+    if (eventSource?.OPEN) return;
+    const agents = Array.from(state.agents.values());
+    const agent = agents[Math.floor(Math.random() * agents.length)];
+    if (!agent) return;
+    agent.currentTool = demoTools[Math.floor(Math.random() * demoTools.length)];
+    agent.currentAction = demoTargets[Math.floor(Math.random() * demoTargets.length)];
+    if (agent.tokens) {
+      agent.tokens.total += Math.floor(Math.random() * 2000 + 500);
+      agent.tokens.input += Math.floor(Math.random() * 1500 + 300);
+      agent.tokens.output += Math.floor(Math.random() * 500 + 200);
+    }
+    updateAgentCards();
+  }, 6000);
 
   // ----------------------------------------------------------
   // Boot

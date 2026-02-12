@@ -53,9 +53,11 @@ GIT_REFRESH_INTERVAL = 60
 FILE_POLL_INTERVAL = 2
 SSE_KEEPALIVE_INTERVAL = 15
 
-# Claude Code session scanning
-CLAUDE_DIR = "/home/claude-agent/.claude"
-CLAUDE_PROJECTS_DIR = os.path.join(CLAUDE_DIR, "projects")
+# Claude Code session scanning — scan all users that might run sessions
+CLAUDE_PROJECTS_DIRS = [
+    "/home/claude-agent/.claude/projects",
+    "/root/.claude/projects",
+]
 SESSION_ACTIVE_THRESHOLD = 60   # seconds — file modified within this = active
 SESSION_POLL_INTERVAL = 3
 
@@ -222,6 +224,8 @@ def _decode_project_path(encoded_name):
         "-home-claude-agent-project-",
         "-home-claude-agent-project",
         "-home-claude-agent-",
+        "-root-",
+        "-root",
     ]
     name = encoded_name
     for prefix in prefixes:
@@ -328,67 +332,68 @@ def scan_sessions():
     now = time.time()
     agents = []
 
-    if not os.path.isdir(CLAUDE_PROJECTS_DIR):
-        return agents
-
-    for project_dir in os.listdir(CLAUDE_PROJECTS_DIR):
-        project_path = os.path.join(CLAUDE_PROJECTS_DIR, project_dir)
-        if not os.path.isdir(project_path):
+    for projects_dir in CLAUDE_PROJECTS_DIRS:
+        if not os.path.isdir(projects_dir):
             continue
 
-        project_label = _decode_project_path(project_dir)
-
-        for jsonl_path in glob.glob(os.path.join(project_path, "*.jsonl")):
-            try:
-                mtime = os.path.getmtime(jsonl_path)
-            except OSError:
+        for project_dir in os.listdir(projects_dir):
+            project_path = os.path.join(projects_dir, project_dir)
+            if not os.path.isdir(project_path):
                 continue
 
-            if now - mtime > SESSION_ACTIVE_THRESHOLD:
-                continue
+            project_label = _decode_project_path(project_dir)
 
-            session_id = os.path.splitext(os.path.basename(jsonl_path))[0]
-            state = _parse_session_tail(_tail_read(jsonl_path))
+            for jsonl_path in glob.glob(os.path.join(project_path, "*.jsonl")):
+                try:
+                    mtime = os.path.getmtime(jsonl_path)
+                except OSError:
+                    continue
 
-            agents.append({
-                "id": session_id,
-                "label": project_label,
-                "parent": None,
-                "status": "active",
-                "currentTool": state["currentTool"],
-                "currentAction": state["currentAction"] or state.get("lastUserMessage") or "Working...",
-                "goalId": None,
-                "tokens": state["tokens"],
-                "model": state["model"],
-                "x": 0, "y": 0, "nodeRadius": 28,
-            })
+                if now - mtime > SESSION_ACTIVE_THRESHOLD:
+                    continue
 
-            # Check for active subagents
-            sa_dir = os.path.join(project_path, session_id, "subagents")
-            if os.path.isdir(sa_dir):
-                for sa_file in glob.glob(os.path.join(sa_dir, "agent-*.jsonl")):
-                    try:
-                        sa_mtime = os.path.getmtime(sa_file)
-                    except OSError:
-                        continue
-                    if now - sa_mtime > SESSION_ACTIVE_THRESHOLD:
-                        continue
+                session_id = os.path.splitext(os.path.basename(jsonl_path))[0]
+                state = _parse_session_tail(_tail_read(jsonl_path))
 
-                    sa_name = os.path.splitext(os.path.basename(sa_file))[0]
-                    sa_state = _parse_session_tail(_tail_read(sa_file, 8192))
+                agents.append({
+                    "id": session_id,
+                    "label": project_label,
+                    "parent": None,
+                    "status": "active",
+                    "currentTool": state["currentTool"],
+                    "currentAction": state["currentAction"] or state.get("lastUserMessage") or "Working...",
+                    "goalId": None,
+                    "tokens": state["tokens"],
+                    "model": state["model"],
+                    "x": 0, "y": 0, "nodeRadius": 28,
+                })
 
-                    agents.append({
-                        "id": sa_name,
-                        "label": sa_state["currentTool"] or sa_name.replace("agent-", ""),
-                        "parent": session_id,
-                        "status": "active",
-                        "currentTool": sa_state["currentTool"],
-                        "currentAction": sa_state["currentAction"] or "Working...",
-                        "goalId": None,
-                        "tokens": sa_state["tokens"],
-                        "model": sa_state["model"],
-                        "x": 0, "y": 0, "nodeRadius": 16,
-                    })
+                # Check for active subagents
+                sa_dir = os.path.join(project_path, session_id, "subagents")
+                if os.path.isdir(sa_dir):
+                    for sa_file in glob.glob(os.path.join(sa_dir, "agent-*.jsonl")):
+                        try:
+                            sa_mtime = os.path.getmtime(sa_file)
+                        except OSError:
+                            continue
+                        if now - sa_mtime > SESSION_ACTIVE_THRESHOLD:
+                            continue
+
+                        sa_name = os.path.splitext(os.path.basename(sa_file))[0]
+                        sa_state = _parse_session_tail(_tail_read(sa_file, 8192))
+
+                        agents.append({
+                            "id": sa_name,
+                            "label": sa_state["currentTool"] or sa_name.replace("agent-", ""),
+                            "parent": session_id,
+                            "status": "active",
+                            "currentTool": sa_state["currentTool"],
+                            "currentAction": sa_state["currentAction"] or "Working...",
+                            "goalId": None,
+                            "tokens": sa_state["tokens"],
+                            "model": sa_state["model"],
+                            "x": 0, "y": 0, "nodeRadius": 16,
+                        })
 
     return agents
 

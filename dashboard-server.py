@@ -829,12 +829,13 @@ def scan_sessions():
                     # Extract task descriptions from parent session
                     task_descs = _extract_task_descriptions(jsonl_path)
 
+                    SA_ACTIVE_THRESHOLD = 120  # 2 min — subagents finish quickly
                     for sa_file in glob.glob(os.path.join(sa_dir, "agent-*.jsonl")):
                         try:
                             sa_mtime = os.path.getmtime(sa_file)
                         except OSError:
                             continue
-                        if now - sa_mtime > SESSION_ACTIVE_THRESHOLD:
+                        if now - sa_mtime > SA_ACTIVE_THRESHOLD:
                             continue
 
                         sa_name = os.path.splitext(os.path.basename(sa_file))[0]

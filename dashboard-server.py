@@ -47,6 +47,19 @@ WATCHED_FILES = {
     os.path.join(PROJECT_DIR, ".planning", "ASSETS.md"):        "assets_full",
 }
 
+# Additional files to watch for document-change events (architecture view)
+DOC_WATCH_FILES = {
+    os.path.join(PROJECT_DIR, ".claude", "rules", f): f.replace(".md", "")
+    for f in [
+        "reality-model-architecture.md", "goal-advancement.md",
+        "task-lifecycle.md", "review-gate.md", "approval-rules.md",
+        "security.md", "usage-tracking.md", "self-correction.md",
+        "model-strategy.md",
+    ]
+}
+DOC_WATCH_FILES[os.path.join(PROJECT_DIR, "CLAUDE.md")] = "CLAUDE"
+DOC_WATCH_FILES[os.path.join(PROJECT_DIR, ".planning", "FAILURE-CATALOG.md")] = "FAILURE-CATALOG"
+
 # Commit prefixes that indicate self-modification / learning events
 SYNAPSE_PATTERNS = re.compile(
     r"^(rules|review|identity|skill|strategy|research|opps|metrics|self-mod):",
@@ -292,6 +305,125 @@ def get_document_metadata() -> dict[str, dict]:
         except OSError:
             docs[fname] = {"exists": False, "mtime": None, "size": 0}
     return docs
+
+
+def get_full_document_map() -> dict:
+    """Build full document map with content, metadata, relationships, and tokens."""
+    planning_dir = os.path.join(PROJECT_DIR, ".planning")
+    rules_dir = os.path.join(PROJECT_DIR, ".claude", "rules")
+
+    # Document definitions: (id, path, category, description)
+    doc_defs = [
+        # Rules
+        ("reality-model-architecture", os.path.join(rules_dir, "reality-model-architecture.md"),
+         "rules", "Research & understanding framework"),
+        ("goal-advancement", os.path.join(rules_dir, "goal-advancement.md"),
+         "rules", "Goal execution & cycle management"),
+        ("task-lifecycle", os.path.join(rules_dir, "task-lifecycle.md"),
+         "rules", "How work gets done"),
+        ("review-gate", os.path.join(rules_dir, "review-gate.md"),
+         "rules", "Owner interaction standards"),
+        ("approval-rules", os.path.join(rules_dir, "approval-rules.md"),
+         "rules", "What needs human approval"),
+        ("security", os.path.join(rules_dir, "security.md"),
+         "rules", "Security policies"),
+        ("usage-tracking", os.path.join(rules_dir, "usage-tracking.md"),
+         "rules", "Session/weekly usage reviews"),
+        ("self-correction", os.path.join(rules_dir, "self-correction.md"),
+         "rules", "Learn from mistakes protocol"),
+        ("model-strategy", os.path.join(rules_dir, "model-strategy.md"),
+         "rules", "Model & rate budget strategy"),
+        # Planning / state
+        ("GOALS", os.path.join(planning_dir, "GOALS.md"),
+         "input", "Top-level goals"),
+        ("ASSETS", os.path.join(planning_dir, "ASSETS.md"),
+         "input", "Available resources"),
+        ("STATE", os.path.join(planning_dir, "STATE.md"),
+         "state", "System state & progress"),
+        ("STRATEGY", os.path.join(planning_dir, "STRATEGY.md"),
+         "state", "Current strategy document"),
+        ("METRICS", os.path.join(planning_dir, "METRICS.md"),
+         "state", "Performance metrics"),
+        ("LOG", os.path.join(planning_dir, "LOG.md"),
+         "state", "Daily activity log"),
+        ("OPPORTUNITIES", os.path.join(planning_dir, "OPPORTUNITIES.md"),
+         "state", "Discovered opportunities"),
+        ("FAILURE-CATALOG", os.path.join(planning_dir, "FAILURE-CATALOG.md"),
+         "state", "Mistake root causes & fixes"),
+        # System hub
+        ("CLAUDE", os.path.join(PROJECT_DIR, "CLAUDE.md"),
+         "hub", "System identity & instructions"),
+    ]
+
+    # Relationship definitions: (source_id, target_id, relation_type, label)
+    relationships = [
+        # CLAUDE.md hub connections
+        ("CLAUDE", "GOALS", "reads", "reads at cycle start"),
+        ("CLAUDE", "ASSETS", "reads", "reads at cycle start"),
+        ("CLAUDE", "reality-model-architecture", "defines", "core framework"),
+        ("CLAUDE", "goal-advancement", "defines", "goal rules"),
+        ("CLAUDE", "task-lifecycle", "defines", "work rules"),
+        ("CLAUDE", "STATE", "reads", "current state"),
+        # Reality model architecture connections
+        ("reality-model-architecture", "STATE", "writes", "confidence levels"),
+        ("reality-model-architecture", "goal-advancement", "extends", "research methods"),
+        ("reality-model-architecture", "self-correction", "integrates", "learning feedback"),
+        # Goal advancement connections
+        ("goal-advancement", "GOALS", "reads", "cycle start"),
+        ("goal-advancement", "ASSETS", "reads", "cycle start"),
+        ("goal-advancement", "STATE", "writes", "rate tracking"),
+        ("goal-advancement", "LOG", "writes", "usage tier"),
+        ("goal-advancement", "OPPORTUNITIES", "writes", "ideation HITs"),
+        ("goal-advancement", "METRICS", "writes", "ideation stats"),
+        ("goal-advancement", "usage-tracking", "delegates", "session-end"),
+        # Task lifecycle connections
+        ("task-lifecycle", "STATE", "writes", "rest window"),
+        # Review gate connections
+        ("review-gate", "approval-rules", "enforces", "approval boundary"),
+        ("review-gate", "reality-model-architecture", "applies", "emergence criteria"),
+        # Self-correction connections
+        ("self-correction", "FAILURE-CATALOG", "writes", "error entries"),
+        ("self-correction", "METRICS", "writes", "decision quality"),
+        ("self-correction", "reality-model-architecture", "informs", "refinements"),
+        # Usage tracking connections
+        ("usage-tracking", "STATE", "writes", "rate tracking"),
+        ("usage-tracking", "LOG", "writes", "usage reviews"),
+        ("usage-tracking", "OPPORTUNITIES", "reads", "seed investigations"),
+        # Security connections
+        ("security", "STATE", "writes", "installed versions"),
+        ("security", "approval-rules", "enforces", "install blocking"),
+        # Model strategy connections
+        ("model-strategy", "STATE", "writes", "token usage"),
+    ]
+
+    docs = []
+    for doc_id, path, category, description in doc_defs:
+        text = _read_file(path)
+        if text is None:
+            continue
+        word_count = len(text.split())
+        token_estimate = int(word_count * 1.3)
+        try:
+            st = os.stat(path)
+            mtime = datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat()
+            size = st.st_size
+        except OSError:
+            mtime = None
+            size = 0
+        docs.append({
+            "id": doc_id,
+            "name": os.path.basename(path),
+            "path": path.replace(PROJECT_DIR + "/", ""),
+            "category": category,
+            "description": description,
+            "content": text[:50000],  # Cap content to prevent huge responses
+            "words": word_count,
+            "tokens": token_estimate,
+            "size": size,
+            "mtime": mtime,
+        })
+
+    return {"documents": docs, "relationships": relationships}
 
 
 def get_synapse_history() -> list[dict]:
@@ -655,6 +787,33 @@ def file_watcher():
                 with cache_lock:
                     file_cache[path] = {"mtime": mtime, "data": data}
                 broadcaster.broadcast(event_type, json.dumps(data))
+        # Also watch architecture documents for change events
+        for path, doc_id in DOC_WATCH_FILES.items():
+            try:
+                st = os.stat(path)
+                mtime = st.st_mtime
+                size = st.st_size
+            except OSError:
+                continue
+            prev = mtimes.get(path)
+            if prev != mtime:
+                old_size = file_cache.get(path, {}).get("size", size)
+                delta = size - old_size
+                mtimes[path] = mtime
+                with cache_lock:
+                    file_cache[path] = {"mtime": mtime, "size": size}
+                word_count = 0
+                text = _read_file(path)
+                if text:
+                    word_count = len(text.split())
+                broadcaster.broadcast("doc_change", json.dumps({
+                    "id": doc_id,
+                    "name": os.path.basename(path),
+                    "mtime": datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat(),
+                    "size": size,
+                    "delta": delta,
+                    "tokens": int(word_count * 1.3),
+                }))
         time.sleep(FILE_POLL_INTERVAL)
 
 
@@ -662,10 +821,53 @@ def file_watcher():
 
 COMMIT_TYPE_RE = re.compile(r"^(\w+)(?:\(.+?\))?:\s*(.+)")
 
+def _build_goal_keywords(goal_names):
+    """Build keyword matchers for goal names.
+
+    Each goal gets: its full name, the name without 'goal' suffix,
+    and individual significant words (>3 chars).
+    Returns dict mapping keyword → goal name (lowercase).
+    """
+    # Additional keyword hints for common commit patterns
+    EXTRA_KEYWORDS = {
+        "product": ["revenue", "film", "festival", "competition", "monetiz",
+                     "paying", "profit", "pricing", "customer"],
+        "content": ["newsletter", "blog", "publish", "audience", "content",
+                     "writing", "article", "post", "media"],
+        "gui": ["dashboard", "gui", "visualization", "interface", "frontend",
+                "ui", "display"],
+        "self-improvement": ["self-review", "health check", "governance",
+                             "ideation", "skill", "tool", "rule", "self-mod",
+                             "capability", "v2 reality", "architecture",
+                             "self-correction", "failure catalog"],
+    }
+    kw_map = {}
+    for gn in goal_names:
+        # Full name match
+        kw_map[gn] = gn
+        # Strip "goal" suffix
+        stripped = gn.replace(" goal", "").strip()
+        if stripped:
+            kw_map[stripped] = gn
+        # Individual words (>3 chars, not "goal")
+        for word in stripped.split():
+            if len(word) > 3 and word != "goal":
+                kw_map[word] = gn
+        # Extra keyword hints
+        for hint_key, hints in EXTRA_KEYWORDS.items():
+            if hint_key in gn:
+                for h in hints:
+                    kw_map[h] = gn
+    return kw_map
+
+
 def refresh_git_data():
     """Run git log and build structured commit data, including synapse history."""
-    goals = parse_goals(os.path.join(PROJECT_DIR, "GOALS.md"))
+    goals = parse_goals(os.path.join(PROJECT_DIR, ".planning", "GOALS.md"))
     goal_names = [g["name"].lower() for g in goals]
+    goal_kw = _build_goal_keywords(goal_names)
+    # Sort keywords longest first so specific matches win over short ones
+    sorted_keywords = sorted(goal_kw.keys(), key=len, reverse=True)
 
     try:
         result = subprocess.run(
@@ -692,9 +894,9 @@ def refresh_git_data():
 
         matched_goal = None
         msg_lower = message.lower()
-        for gn in goal_names:
-            if gn in msg_lower:
-                matched_goal = gn
+        for kw in sorted_keywords:
+            if kw in msg_lower:
+                matched_goal = goal_kw[kw]
                 break
 
         if matched_goal:
@@ -881,6 +1083,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 "wrapper": parse_security_log(wrapper_path),
                 "backup": parse_json_file(backup_path),
             })
+
+        elif path == "/api/documents":
+            self._send_json(get_full_document_map())
 
         elif path == "/api/stream":
             self._handle_sse()

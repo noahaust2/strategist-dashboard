@@ -79,6 +79,114 @@ svg#main-viz {
 }
 #zoom-indicator.visible { opacity: 1; }
 
+/* View toggle */
+#view-toggle {
+  position: fixed; top: 12px; left: 12px;
+  z-index: 300;
+  display: flex; gap: 2px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 3px;
+}
+.view-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.view-btn:hover { color: var(--text-secondary); }
+.view-btn.active {
+  background: var(--bg-card);
+  color: var(--accent-blue);
+  box-shadow: 0 0 8px rgba(74,158,255,0.15);
+}
+
+/* Architecture view */
+#arch-view {
+  position: fixed; inset: 0;
+  z-index: 2;
+  background: var(--bg-primary);
+  display: flex;
+}
+#arch-graph {
+  flex: 1;
+  width: 100%; height: 100%;
+}
+#arch-doc-panel {
+  width: 480px;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-subtle);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#arch-doc-panel.open { transform: translateX(0); }
+#arch-doc-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex; align-items: center; gap: 12px;
+  flex-shrink: 0;
+}
+#arch-doc-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+#arch-doc-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+#arch-doc-close {
+  background: none; border: none;
+  color: var(--text-muted);
+  font-size: 18px; cursor: pointer;
+  padding: 0 4px;
+}
+#arch-doc-close:hover { color: var(--text-primary); }
+#arch-doc-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+}
+#arch-doc-content::-webkit-scrollbar { width: 4px; }
+#arch-doc-content::-webkit-scrollbar-track { background: transparent; }
+#arch-doc-content::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 2px; }
+
+/* Architecture graph node styles */
+.arch-node { cursor: pointer; }
+.arch-node:hover .arch-node-ring { stroke-opacity: 0.9 !important; }
+.arch-link { fill: none; stroke-opacity: 0.25; }
+.arch-link-arrow { fill-opacity: 0.35; }
+@keyframes archPulse {
+  0% { r: attr(r); stroke-opacity: 0.8; }
+  50% { stroke-opacity: 0.3; }
+  100% { stroke-opacity: 0.8; }
+}
+.arch-node-pulse {
+  animation: archPulse 1.5s ease-in-out;
+}
+.arch-delta-float {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  pointer-events: none;
+}
+
 /* Sidebar */
 #sidebar {
   position: fixed; top: 0; right: 0;
@@ -1530,7 +1638,7 @@ svg#main-viz {
 <body>
 
 <!-- Welcome Guide (shows on first load) -->
-<div id="welcome-guide">
+<div id="welcome-guide" class="hidden">
   <div id="guide-content">
     <h1>Autonomous Agent Dashboard</h1>
     <div class="guide-subtitle">
@@ -1617,6 +1725,25 @@ svg#main-viz {
 
 <!-- Help button -->
 <button id="help-btn" title="How to read this dashboard">?</button>
+
+<!-- View toggle -->
+<div id="view-toggle">
+  <button class="view-btn active" data-view="canvas" title="Agent canvas">Canvas</button>
+  <button class="view-btn" data-view="arch" title="System architecture">Architecture</button>
+</div>
+
+<!-- Architecture View -->
+<div id="arch-view" style="display:none;">
+  <svg id="arch-graph"></svg>
+  <div id="arch-doc-panel">
+    <div id="arch-doc-header">
+      <span id="arch-doc-title">Select a document</span>
+      <span id="arch-doc-meta"></span>
+      <button id="arch-doc-close">&times;</button>
+    </div>
+    <pre id="arch-doc-content">Click any document node to view its contents.</pre>
+  </div>
+</div>
 
 <div id="canvas-container">
   <canvas id="bg-canvas"></canvas>
@@ -3541,8 +3668,9 @@ svg#main-viz {
       if (a.y === undefined || a.y === 0) a.y = cy;
     });
 
-    const root = agents.find(a => !a.parent);
-    if (!root) {
+    // Find all root nodes (sessions without a parent)
+    const roots = agents.filter(a => !a.parent);
+    if (roots.length === 0) {
       // Fallback: no hierarchy — distribute agents in a circle around center
       state._treeCx = cx;
       state._treeCy = cy;
@@ -3560,7 +3688,7 @@ svg#main-viz {
       return;
     }
 
-    // Build d3 hierarchy from flat agent list
+    // Build d3 hierarchy — create virtual root if multiple independent sessions
     function buildNode(agent) {
       const children = agents.filter(a => a.parent === agent.id);
       const node = { id: agent.id };
@@ -3568,13 +3696,21 @@ svg#main-viz {
       return node;
     }
 
-    const hierarchy = d3.hierarchy(buildNode(root));
+    let hierarchyRoot;
+    if (roots.length === 1) {
+      hierarchyRoot = buildNode(roots[0]);
+    } else {
+      // Multiple independent sessions — wrap in a virtual root
+      hierarchyRoot = { id: '__virtual_root__', children: roots.map(r => buildNode(r)) };
+    }
+
+    const hierarchy = d3.hierarchy(hierarchyRoot);
 
     // Radial tree layout — spread branches around full circle
     const maxRadius = Math.min(state.width, state.height) * 0.22;
     const treeLayout = d3.tree()
       .size([2 * Math.PI, maxRadius])
-      .separation((a, b) => (a.parent === b.parent ? 1 : 2) / a.depth);
+      .separation((a, b) => (a.parent === b.parent ? 1 : 2) / Math.max(1, a.depth));
 
     treeLayout(hierarchy);
 
@@ -3584,20 +3720,30 @@ svg#main-viz {
 
     // Apply computed positions to agent objects
     hierarchy.each(node => {
+      if (node.data.id === '__virtual_root__') return; // skip virtual root
       const agent = state.agents.get(node.data.id);
       if (!agent) return;
+
+      // Adjust depth for virtual root offset (real roots are at depth 1 in hierarchy)
+      const effectiveDepth = roots.length > 1 ? Math.max(0, node.depth - 1) : node.depth;
 
       agent._angle = node.x;   // radians
       agent._radius = node.y;  // distance from center
 
       // Base size from hierarchy, boosted by token usage (more work = bigger)
-      const baseSize = node.depth === 0 ? 40 : node.depth === 1 ? 28 : node.depth === 2 ? 20 : 16;
+      const baseSize = effectiveDepth === 0 ? 40 : effectiveDepth === 1 ? 28 : effectiveDepth === 2 ? 20 : 16;
       const tokenBoost = agent.tokens ? Math.min(12, Math.sqrt(agent.tokens.total / 10000) * 3) : 0;
       agent.nodeRadius = baseSize + tokenBoost;
 
-      if (node.depth === 0) {
-        agent._baseX = cx;
-        agent._baseY = cy;
+      if (effectiveDepth === 0) {
+        // Root sessions — place near center with slight spread for multiple roots
+        if (roots.length === 1) {
+          agent._baseX = cx;
+          agent._baseY = cy;
+        } else {
+          agent._baseX = cx + node.y * Math.sin(node.x) * 0.5;
+          agent._baseY = cy - node.y * Math.cos(node.x) * 0.5;
+        }
       } else {
         // Polar to cartesian (angle 0 = top, clockwise)
         agent._baseX = cx + node.y * Math.sin(node.x);
@@ -4593,12 +4739,12 @@ svg#main-viz {
         connDot.className = '';
         connText.textContent = 'connected';
         if (!state.liveConnected) {
-          state.liveConnected = true;
+          state.liveConnected = false; // Wait for first agent_tree event before showing empty state
+          state._sseConnected = true;
           // Clear demo data — real server will push live state
           state.agents.clear();
           state.toolCalls = [];
           state.thinkingSteps = [];
-          renderAgentTree();
           updateAgentCards();
           updateToolCalls();
           updateThinkingTicker();
@@ -4717,12 +4863,28 @@ svg#main-viz {
         try {
           const data = JSON.parse(e.data);
           if (data.agents) {
+            // Mark live on first real agent data (prevents empty-state flash)
+            if (!state.liveConnected) state.liveConnected = true;
+            // Preserve computed positions from force simulation before clearing
+            const prevPositions = new Map();
+            state.agents.forEach((agent, id) => {
+              prevPositions.set(id, { x: agent.x, y: agent.y, _baseX: agent._baseX, _baseY: agent._baseY });
+            });
             state.agents.clear();
             const cx = state.width / 2, cy = state.height / 2;
             data.agents.forEach(a => {
-              // Ensure agents have valid positions (prevents 0,0 overlap)
-              if (!a.x || a.x === 0) a.x = cx;
-              if (!a.y || a.y === 0) a.y = cy;
+              const prev = prevPositions.get(a.id);
+              if (prev) {
+                // Returning agent — keep its force-computed position
+                a.x = prev.x;
+                a.y = prev.y;
+                a._baseX = prev._baseX;
+                a._baseY = prev._baseY;
+              } else {
+                // New agent — start at center
+                a.x = cx;
+                a.y = cy;
+              }
               a._lastUpdate = Date.now();
               state.agents.set(a.id, a);
             });
@@ -4794,7 +4956,17 @@ svg#main-viz {
       eventSource.addEventListener('goals_full', (e) => {
         try {
           const data = JSON.parse(e.data);
-          if (Array.isArray(data)) state.goalsText = data;
+          if (Array.isArray(data)) {
+            state.goalsText = data;
+            state.goals = data.map(g => ({
+              id: g.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, ''),
+              name: g.name,
+              color: g.color,
+              progress: 0,
+              commits7d: 0,
+            }));
+            layoutColonies();
+          }
           updateSystemPanel();
         } catch(err) {}
       });
@@ -4804,6 +4976,13 @@ svg#main-viz {
           const data = JSON.parse(e.data);
           if (data && typeof data === 'object') state.assetsData = data;
           updateSystemPanel();
+        } catch(err) {}
+      });
+
+      eventSource.addEventListener('doc_change', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          handleDocChange(data);
         } catch(err) {}
       });
 
@@ -4847,11 +5026,31 @@ svg#main-viz {
     updateMissionStatus();
   }
 
+  // Helper: resolve a goal name/id from git data to a colony
+  function resolveColony(goalKey) {
+    if (!goalKey) return null;
+    // Direct match
+    if (state.colonies.has(goalKey)) return state.colonies.get(goalKey);
+    // Slugify the goal name to match colony IDs (e.g. "product goal" → "product-goal")
+    const slugified = goalKey.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+    if (state.colonies.has(slugified)) return state.colonies.get(slugified);
+    // Partial match — check if any colony ID contains the key or vice versa
+    for (const [id, colony] of state.colonies) {
+      if (id.includes(slugified) || slugified.includes(id)) return colony;
+    }
+    return null;
+  }
+
   function handleGitActivity(data) {
     const commits = Array.isArray(data) ? data : data.commits || [data];
-    commits.forEach(commit => {
-      const goalId = commit.goalId || commit.goal;
-      const colony = state.colonies.get(goalId);
+    const colonyArr = Array.from(state.colonies.values());
+    commits.forEach((commit, i) => {
+      const goalKey = commit.goalId || commit.goal;
+      let colony = resolveColony(goalKey);
+      // Fallback: distribute unmatched commits evenly across colonies
+      if (!colony && colonyArr.length > 0) {
+        colony = colonyArr[i % colonyArr.length];
+      }
       if (!colony) return;
 
       const particle = new Particle(commit, colony);
@@ -4945,7 +5144,18 @@ svg#main-viz {
   }
 
   function handleStateResponse(data) {
-    if (data.goals) {
+    // API returns goals_full (from WATCHED_FILES event type), not goals
+    if (data.goals_full && Array.isArray(data.goals_full)) {
+      state.goalsText = data.goals_full;
+      state.goals = data.goals_full.map(g => ({
+        id: g.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, ''),
+        name: g.name,
+        color: g.color,
+        progress: 0,
+        commits7d: 0,
+      }));
+      layoutColonies();
+    } else if (data.goals) {
       state.goals = data.goals;
     }
     if (data.health) state.health = data.health;
@@ -5600,10 +5810,10 @@ Auth: tokens refreshed, no anomalies`;
     });
   }
 
-  // Auto-hide guide if already seen
+  // Show guide only if never seen before (starts hidden in HTML)
   try {
-    if (localStorage.getItem('dashboard-guide-seen') === '1') {
-      guideEl.classList.add('hidden');
+    if (localStorage.getItem('dashboard-guide-seen') !== '1') {
+      guideEl.classList.remove('hidden');
     }
   } catch(e) {}
 
@@ -5884,6 +6094,361 @@ Auth: tokens refreshed, no anomalies`;
     if (i === j) j = (i + 1) % colonies.length;
     triggerDaydreamSpark(colonies[i], colonies[j]);
   }, 15000 + Math.random() * 10000);
+
+  // ----------------------------------------------------------
+  // Architecture View
+  // ----------------------------------------------------------
+  const ARCH_COLORS = {
+    hub:   { fill: '#1e293b', stroke: '#4a9eff', text: '#4a9eff' },
+    rules: { fill: '#1e1b2e', stroke: '#a78bfa', text: '#a78bfa' },
+    input: { fill: '#0f2922', stroke: '#34d399', text: '#34d399' },
+    state: { fill: '#1e2433', stroke: '#22d3ee', text: '#22d3ee' },
+  };
+  const LINK_COLORS = {
+    reads: '#34d399', writes: '#f59e0b', defines: '#4a9eff',
+    extends: '#a78bfa', integrates: '#f472b6', enforces: '#ef4444',
+    applies: '#eab308', delegates: '#22d3ee', informs: '#8b5cf6',
+  };
+
+  let archData = null;  // cached from /api/documents
+  let archSim = null;   // D3 force simulation
+  let archInitialized = false;
+
+  function initArchView() {
+    if (archInitialized) return;
+    archInitialized = true;
+    fetchArchData();
+  }
+
+  async function fetchArchData() {
+    try {
+      const res = await fetch(API_BASE + '/api/documents');
+      if (!res.ok) return;
+      archData = await res.json();
+      renderArchGraph();
+    } catch(err) {
+      console.log('Architecture API not available');
+    }
+  }
+
+  function renderArchGraph() {
+    if (!archData) return;
+    const svg = d3.select('#arch-graph');
+    svg.selectAll('*').remove();
+
+    const width = window.innerWidth - 20;
+    const height = window.innerHeight;
+    svg.attr('viewBox', `0 0 ${width} ${height}`);
+
+    const docs = archData.documents;
+    const rels = archData.relationships;
+
+    // Create node data with initial positions
+    const cx = width / 2 - 100, cy = height / 2;
+    const nodes = docs.map((d, i) => {
+      const angle = (i / docs.length) * Math.PI * 2 - Math.PI / 2;
+      const radius = d.category === 'hub' ? 0 : Math.min(width, height) * 0.28;
+      return {
+        ...d,
+        x: cx + Math.cos(angle) * radius,
+        y: cy + Math.sin(angle) * radius,
+        r: Math.max(18, Math.min(55, Math.sqrt(d.tokens / 50))),
+      };
+    });
+
+    const nodeById = new Map(nodes.map(n => [n.id, n]));
+
+    // Create link data — filter out links where source/target doesn't exist
+    const links = rels
+      .filter(r => nodeById.has(r[0]) && nodeById.has(r[1]))
+      .map(r => ({
+        source: r[0], target: r[1], type: r[2], label: r[3],
+      }));
+
+    // Zoom
+    const archZoom = d3.zoom()
+      .scaleExtent([0.3, 5])
+      .on('zoom', (event) => {
+        container.attr('transform', event.transform);
+      });
+    svg.call(archZoom);
+
+    const container = svg.append('g').attr('class', 'arch-container');
+
+    // Arrow markers for each link type
+    const defs = svg.append('defs');
+    Object.entries(LINK_COLORS).forEach(([type, color]) => {
+      defs.append('marker')
+        .attr('id', 'arrow-' + type)
+        .attr('viewBox', '0 -3 6 6')
+        .attr('refX', 6).attr('refY', 0)
+        .attr('markerWidth', 5).attr('markerHeight', 5)
+        .attr('orient', 'auto')
+        .append('path')
+        .attr('d', 'M0,-3L6,0L0,3')
+        .attr('fill', color)
+        .attr('class', 'arch-link-arrow');
+    });
+
+    // Force simulation
+    archSim = d3.forceSimulation(nodes)
+      .force('link', d3.forceLink(links).id(d => d.id).distance(d => {
+        const s = nodeById.get(typeof d.source === 'string' ? d.source : d.source.id);
+        const t = nodeById.get(typeof d.target === 'string' ? d.target : d.target.id);
+        return (s ? s.r : 30) + (t ? t.r : 30) + 80;
+      }).strength(0.4))
+      .force('charge', d3.forceManyBody().strength(-500))
+      .force('center', d3.forceCenter(cx, cy).strength(0.05))
+      .force('collide', d3.forceCollide(d => d.r + 15))
+      .force('x', d3.forceX(cx).strength(0.03))
+      .force('y', d3.forceY(cy).strength(0.03));
+
+    // Links
+    const linkGs = container.selectAll('.arch-link-g')
+      .data(links).enter().append('g').attr('class', 'arch-link-g');
+
+    const linkPaths = linkGs.append('path')
+      .attr('class', 'arch-link')
+      .attr('stroke', d => LINK_COLORS[d.type] || '#666')
+      .attr('stroke-width', 1.5)
+      .attr('marker-end', d => 'url(#arrow-' + d.type + ')');
+
+    // Link labels (visible on hover/zoom)
+    const linkLabels = linkGs.append('text')
+      .attr('class', 'arch-link-label')
+      .attr('text-anchor', 'middle')
+      .attr('fill', d => LINK_COLORS[d.type] || '#666')
+      .attr('font-size', 9)
+      .attr('opacity', 0.5)
+      .text(d => d.label);
+
+    // Nodes
+    const nodeGs = container.selectAll('.arch-node')
+      .data(nodes).enter().append('g')
+      .attr('class', 'arch-node')
+      .call(d3.drag()
+        .on('start', (event, d) => {
+          if (!event.active) archSim.alphaTarget(0.3).restart();
+          d.fx = d.x; d.fy = d.y;
+        })
+        .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y; })
+        .on('end', (event, d) => {
+          if (!event.active) archSim.alphaTarget(0);
+          d.fx = null; d.fy = null;
+        })
+      )
+      .on('click', (event, d) => { openArchDoc(d); });
+
+    // Node background glow
+    nodeGs.append('circle')
+      .attr('class', 'arch-node-glow')
+      .attr('r', d => d.r + 6)
+      .attr('fill', 'none')
+      .attr('stroke', d => (ARCH_COLORS[d.category] || ARCH_COLORS.state).stroke)
+      .attr('stroke-width', 4)
+      .attr('stroke-opacity', 0.08);
+
+    // Node circle
+    nodeGs.append('circle')
+      .attr('class', 'arch-node-ring')
+      .attr('r', d => d.r)
+      .attr('fill', d => (ARCH_COLORS[d.category] || ARCH_COLORS.state).fill)
+      .attr('stroke', d => (ARCH_COLORS[d.category] || ARCH_COLORS.state).stroke)
+      .attr('stroke-width', 1.5)
+      .attr('stroke-opacity', 0.6);
+
+    // Token count bar (fills node from bottom proportional to token count)
+    const maxTokens = Math.max(...nodes.map(n => n.tokens));
+    nodeGs.append('clipPath')
+      .attr('id', d => 'clip-' + d.id)
+      .append('circle')
+      .attr('r', d => d.r);
+
+    nodeGs.append('rect')
+      .attr('class', 'arch-token-fill')
+      .attr('clip-path', d => 'url(#clip-' + d.id + ')')
+      .attr('x', d => -d.r)
+      .attr('width', d => d.r * 2)
+      .attr('y', d => d.r - (d.tokens / maxTokens) * d.r * 2)
+      .attr('height', d => (d.tokens / maxTokens) * d.r * 2)
+      .attr('fill', d => (ARCH_COLORS[d.category] || ARCH_COLORS.state).stroke)
+      .attr('opacity', 0.08);
+
+    // Node label
+    nodeGs.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dominant-baseline', 'central')
+      .attr('fill', d => (ARCH_COLORS[d.category] || ARCH_COLORS.state).text)
+      .attr('font-size', d => d.r > 40 ? 11 : d.r > 25 ? 9 : 7)
+      .attr('font-weight', 500)
+      .attr('font-family', 'var(--font-mono)')
+      .text(d => {
+        const name = d.name.replace('.md', '');
+        return name.length > 14 ? name.slice(0, 12) + '\u2026' : name;
+      });
+
+    // Token count below node
+    nodeGs.append('text')
+      .attr('class', 'arch-token-label')
+      .attr('y', d => d.r + 14)
+      .attr('text-anchor', 'middle')
+      .attr('fill', 'var(--text-muted)')
+      .attr('font-size', 9)
+      .attr('font-family', 'var(--font-mono)')
+      .text(d => d.tokens > 1000 ? Math.round(d.tokens / 1000) + 'K tok' : d.tokens + ' tok');
+
+    // Category badge above node
+    nodeGs.append('text')
+      .attr('y', d => -d.r - 8)
+      .attr('text-anchor', 'middle')
+      .attr('fill', d => (ARCH_COLORS[d.category] || ARCH_COLORS.state).stroke)
+      .attr('font-size', 8)
+      .attr('font-family', 'var(--font-sans)')
+      .attr('opacity', 0.6)
+      .text(d => d.category.toUpperCase());
+
+    // Simulation tick
+    archSim.on('tick', () => {
+      nodeGs.attr('transform', d => `translate(${d.x},${d.y})`);
+      linkPaths.attr('d', d => {
+        const dx = d.target.x - d.source.x;
+        const dy = d.target.y - d.source.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const sr = d.source.r + 4;
+        const tr = d.target.r + 10;
+        const sx = d.source.x + (dx / dist) * sr;
+        const sy = d.source.y + (dy / dist) * sr;
+        const tx = d.target.x - (dx / dist) * tr;
+        const ty = d.target.y - (dy / dist) * tr;
+        // Slight curve for readability
+        const mx = (sx + tx) / 2 - dy * 0.08;
+        const my = (sy + ty) / 2 + dx * 0.08;
+        return `M${sx},${sy} Q${mx},${my} ${tx},${ty}`;
+      });
+      linkLabels
+        .attr('x', d => (d.source.x + d.target.x) / 2)
+        .attr('y', d => (d.source.y + d.target.y) / 2 - 6);
+    });
+
+    // Legend
+    const legend = container.append('g')
+      .attr('transform', `translate(20, ${height - 120})`);
+
+    const legendItems = [
+      { label: 'Hub', color: ARCH_COLORS.hub.stroke },
+      { label: 'Rules', color: ARCH_COLORS.rules.stroke },
+      { label: 'Input', color: ARCH_COLORS.input.stroke },
+      { label: 'State', color: ARCH_COLORS.state.stroke },
+    ];
+    legendItems.forEach((item, i) => {
+      const g = legend.append('g').attr('transform', `translate(0, ${i * 20})`);
+      g.append('circle').attr('r', 5).attr('fill', item.color).attr('opacity', 0.6);
+      g.append('text').attr('x', 14).attr('y', 4)
+        .attr('fill', 'var(--text-muted)').attr('font-size', 10)
+        .text(item.label);
+    });
+
+    const linkLegend = container.append('g')
+      .attr('transform', `translate(20, ${height - 120 + legendItems.length * 20 + 10})`);
+    const linkTypes = ['reads', 'writes', 'defines', 'extends', 'enforces'];
+    linkTypes.forEach((type, i) => {
+      const g = linkLegend.append('g').attr('transform', `translate(${i * 70}, 0)`);
+      g.append('line').attr('x1', 0).attr('y1', 0).attr('x2', 20).attr('y2', 0)
+        .attr('stroke', LINK_COLORS[type]).attr('stroke-width', 1.5);
+      g.append('text').attr('x', 24).attr('y', 4)
+        .attr('fill', 'var(--text-muted)').attr('font-size', 9)
+        .text(type);
+    });
+  }
+
+  function openArchDoc(doc) {
+    document.getElementById('arch-doc-title').textContent = doc.name;
+    document.getElementById('arch-doc-meta').textContent =
+      `${doc.tokens > 1000 ? Math.round(doc.tokens / 1000) + 'K' : doc.tokens} tokens | ${doc.category}`;
+    document.getElementById('arch-doc-content').textContent = doc.content || '(empty)';
+    document.getElementById('arch-doc-panel').classList.add('open');
+  }
+
+  document.getElementById('arch-doc-close').addEventListener('click', () => {
+    document.getElementById('arch-doc-panel').classList.remove('open');
+  });
+
+  // Handle doc_change SSE events — animate pulse on changed node
+  function handleDocChange(data) {
+    if (!archData) return;
+    const svg = d3.select('#arch-graph');
+    const node = svg.selectAll('.arch-node').filter(d => d.id === data.id);
+    if (node.empty()) return;
+
+    // Update token count
+    const doc = archData.documents.find(d => d.id === data.id);
+    if (doc) {
+      doc.tokens = data.tokens;
+      doc.size = data.size;
+      doc.mtime = data.mtime;
+    }
+
+    // Update token label
+    node.select('.arch-token-label')
+      .text(data.tokens > 1000 ? Math.round(data.tokens / 1000) + 'K tok' : data.tokens + ' tok');
+
+    // Pulse the node ring
+    const ring = node.select('.arch-node-ring');
+    const col = (ARCH_COLORS[doc?.category] || ARCH_COLORS.state).stroke;
+    ring.transition().duration(200)
+      .attr('stroke-opacity', 1).attr('stroke-width', 3)
+      .transition().duration(800)
+      .attr('stroke-opacity', 0.6).attr('stroke-width', 1.5);
+
+    // Float a delta indicator
+    if (data.delta !== 0) {
+      const sign = data.delta > 0 ? '+' : '';
+      const deltaText = sign + data.delta + 'B';
+      const color = data.delta > 0 ? '#34d399' : '#f472b6';
+      const floater = node.append('text')
+        .attr('class', 'arch-delta-float')
+        .attr('x', 0)
+        .attr('y', d => -(d.r + 16))
+        .attr('text-anchor', 'middle')
+        .attr('fill', color)
+        .attr('opacity', 1)
+        .text(deltaText);
+      floater.transition().duration(2000)
+        .attr('y', d => -(d.r + 50))
+        .attr('opacity', 0)
+        .remove();
+    }
+  }
+
+  // View toggle logic
+  document.querySelectorAll('.view-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = btn.dataset.view;
+      document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const canvasContainer = document.getElementById('canvas-container');
+      const archView = document.getElementById('arch-view');
+      const hudBar = document.getElementById('hud-bar');
+      const missionStatus = document.getElementById('mission-status');
+      const activityFeed = document.getElementById('activity-feed');
+
+      if (view === 'arch') {
+        canvasContainer.style.display = 'none';
+        hudBar.style.display = 'none';
+        missionStatus.style.display = 'none';
+        activityFeed.style.display = 'none';
+        archView.style.display = 'flex';
+        initArchView();
+      } else {
+        archView.style.display = 'none';
+        canvasContainer.style.display = '';
+        hudBar.style.display = '';
+        missionStatus.style.display = '';
+        activityFeed.style.display = '';
+      }
+    });
+  });
 
   // ----------------------------------------------------------
   // Boot

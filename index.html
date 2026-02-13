@@ -3903,38 +3903,44 @@ svg#main-viz {
         }
       });
 
-      // Force 4: Kinetic energy — movement proportional to throughput
+      // Force 4: Kinetic energy — movement proportional to WORK RECENCY
+      // Decays smoothly: full intensity when actively running tools,
+      // drops to near-zero when idle (waiting for user input)
       const tokens = a.tokens ? a.tokens.total : 0;
-      const energy = Math.min(1, tokens / 50000); // 0-1 normalized
+      const tokenEnergy = Math.min(1, tokens / 50000); // 0-1 based on total tokens
+      const secsSinceUpdate = a._lastUpdate ? (now - a._lastUpdate) / 1000 : 60;
+      // Recency factor: 1.0 when just updated, decays to 0 over ~30 seconds
+      const recency = Math.max(0, 1 - secsSinceUpdate / 30);
+      // Combined energy: recency is primary driver, tokens add baseline
+      const energy = recency * (0.5 + tokenEnergy * 0.5);
       const RESEARCH_SET = new Set(['Read', 'Grep', 'Glob', 'WebSearch', 'WebFetch', 'Task']);
       const isResearching = a.currentTool && RESEARCH_SET.has(a.currentTool);
       const seed = (a._baseX || 0) * 0.1 + (a._baseY || 0) * 0.07;
 
-      if (a.status === 'active' && state.agentMode !== 'stagnating') {
-        if (isResearching) {
-          // Researching: smooth sweeping arcs (scanning motion)
+      if (energy > 0.05 && state.agentMode !== 'stagnating') {
+        if (isResearching && recency > 0.3) {
+          // Researching: smooth sweeping arcs — amplitude scales with energy
           const sweepSpeed = 0.02 + energy * 0.03;
-          const sweepAmp = 0.4 + energy * 1.6;
+          const sweepAmp = energy * 2.0;
           fx += Math.sin(state.time * sweepSpeed + seed) * sweepAmp;
           fy += Math.cos(state.time * sweepSpeed * 0.7 + seed + 1) * sweepAmp * 0.6;
         } else {
-          // Building: tighter purposeful jitter
-          const jitterAmp = 0.2 + energy * 1.0;
+          // Building: tighter purposeful jitter — amplitude scales with energy
+          const jitterAmp = energy * 1.2;
           const jitterSpeed = 0.04 + energy * 0.06;
           fx += Math.sin(state.time * jitterSpeed + seed) * jitterAmp;
           fy += Math.cos(state.time * jitterSpeed * 1.3 + seed) * jitterAmp;
-          // Small random impulses for busy builders
-          if (energy > 0.3) {
+          if (energy > 0.5) {
             fx += (Math.random() - 0.5) * energy * 0.6;
             fy += (Math.random() - 0.5) * energy * 0.6;
           }
         }
-      } else if (a.status === 'active' && state.agentMode === 'stagnating') {
+      } else if (state.agentMode === 'stagnating' && a.status === 'active') {
         // Stagnating: nervous random drift
         fx += (Math.random() - 0.5) * 0.5;
         fy += (Math.random() - 0.5) * 0.5;
       } else {
-        // Idle: very slow gentle drift
+        // Idle/low energy: very slow gentle drift
         fx += Math.sin(state.time * 0.005 + seed) * 0.08;
         fy += Math.cos(state.time * 0.004 + seed) * 0.08;
       }
@@ -4180,40 +4186,57 @@ svg#main-viz {
         .attr('opacity', eased * modeDim * freshness);
     });
 
-    // Node size breathes when active — speed modulated by system mode
+    // Node size breathes proportional to work recency — not just on/off
     const modeBreatheMul = state.agentMode === 'rate_limited' ? 0.3
                          : state.agentMode === 'stagnating' ? 0.15
                          : state.agentMode === 'rest' ? 0.1
                          : 1;
-    const breatheScale = 1 + Math.sin(state.time * 0.04 * modeBreatheMul) * 0.06;
 
     merged.select('.agent-node-bg')
       .attr('r', d => {
         const base = d.nodeRadius + 8;
-        return d.status === 'active' ? base * breatheScale : base * 0.9;
+        const secsSince = d._lastUpdate ? (now - d._lastUpdate) / 1000 : 60;
+        const recency = Math.max(0, 1 - secsSince / 30);
+        const breathe = 1 + Math.sin(state.time * 0.04 * modeBreatheMul) * 0.06 * recency;
+        return recency > 0.05 ? base * breathe : base * 0.9;
       })
       .attr('fill', d => {
-        const intensity = d.status === 'active' ? 0.08 : 0.02;
+        const secsSince = d._lastUpdate ? (now - d._lastUpdate) / 1000 : 60;
+        const recency = Math.max(0, 1 - secsSince / 30);
+        const intensity = 0.02 + recency * 0.06;
         return `rgba(200,210,230,${intensity})`;
       })
-      .attr('filter', d => d.status === 'active' ? 'url(#glow-blue)' : 'none');
+      .attr('filter', d => {
+        const secsSince = d._lastUpdate ? (now - d._lastUpdate) / 1000 : 60;
+        return secsSince < 15 ? 'url(#glow-blue)' : 'none';
+      });
 
     merged.select('.agent-node-ring')
       .attr('r', d => {
         const base = d.nodeRadius;
-        return d.status === 'active' ? base * breatheScale : base;
+        const secsSince = d._lastUpdate ? (now - d._lastUpdate) / 1000 : 60;
+        const recency = Math.max(0, 1 - secsSince / 30);
+        const breathe = 1 + Math.sin(state.time * 0.04 * modeBreatheMul) * 0.06 * recency;
+        return recency > 0.05 ? base * breathe : base;
       })
       .attr('stroke', d => {
         const ck = agentColorKey(d, agents);
         return PALETTE[ck].base;
       })
-      .attr('stroke-width', d => d.status === 'active' ? 1.8 : 1)
+      .attr('stroke-width', d => {
+        const secsSince = d._lastUpdate ? (now - d._lastUpdate) / 1000 : 60;
+        return secsSince < 10 ? 1.8 : 1;
+      })
       .attr('stroke-opacity', d => {
-        if (d.status === 'active') return 0.5 + Math.sin(state.time * 0.04) * 0.15;
+        const secsSince = d._lastUpdate ? (now - d._lastUpdate) / 1000 : 60;
+        const recency = Math.max(0, 1 - secsSince / 30);
+        if (recency > 0.1) return 0.4 + recency * 0.2 + Math.sin(state.time * 0.04) * 0.1 * recency;
         return d.status === 'done' ? 0.2 : 0.3;
       })
       .attr('fill', d => {
-        const intensity = d.status === 'active' ? (0.06 + Math.sin(state.time * 0.04) * 0.02) : 0.03;
+        const secsSince = d._lastUpdate ? (now - d._lastUpdate) / 1000 : 60;
+        const recency = Math.max(0, 1 - secsSince / 30);
+        const intensity = 0.03 + recency * 0.05;
         return `rgba(180,195,220,${intensity})`;
       });
 

@@ -77,6 +77,14 @@ GOAL_COLORS = [
     "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#bab0ac",
 ]
 
+# Model context window sizes (tokens)
+MODEL_CONTEXT_LIMITS = {
+    "claude-opus-4-6": 200000,
+    "claude-sonnet-4-5": 200000,
+    "claude-haiku-4-5": 200000,
+}
+MODEL_CONTEXT_DEFAULT = 200000
+
 GIT_REFRESH_INTERVAL = 60
 FILE_POLL_INTERVAL = 2
 SSE_KEEPALIVE_INTERVAL = 15
@@ -494,14 +502,35 @@ def _decode_project_path(encoded_name):
 
 
 def _tail_read(filepath, num_bytes=16384):
-    """Read the last num_bytes of a file and return as lines."""
+    """Read the last num_bytes of a file and return as lines.
+
+    If the initial read contains no assistant messages (e.g. the tail is all
+    progress events), automatically retries with up to 256KB to find actual
+    content.
+    """
     try:
         size = os.path.getsize(filepath)
         with open(filepath, "r", encoding="utf-8", errors="replace") as f:
             if size > num_bytes:
                 f.seek(size - num_bytes)
                 f.readline()  # skip partial first line
-            return f.readlines()
+            lines = f.readlines()
+
+        # Check if we found any assistant messages; if not, read more
+        has_assistant = any('"type":"assistant"' in l or '"type": "assistant"' in l for l in lines)
+        if not has_assistant and size > num_bytes:
+            # Retry with larger reads (64KB, 256KB)
+            for bigger in (65536, 262144):
+                if bigger <= num_bytes or size <= bigger:
+                    continue
+                with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+                    f.seek(size - bigger)
+                    f.readline()
+                    lines = f.readlines()
+                if any('"type":"assistant"' in l or '"type": "assistant"' in l for l in lines):
+                    break
+
+        return lines
     except OSError:
         return []
 
@@ -544,6 +573,7 @@ def _parse_session_tail(lines):
         "reasoning": [],
         "tokens": {"input": 0, "output": 0, "total": 0},
         "model": None,
+        "contextWindow": {"used": 0, "max": MODEL_CONTEXT_DEFAULT, "ratio": 0, "compacting": False},
     }
 
     for line in lines:
@@ -563,9 +593,15 @@ def _parse_session_tail(lines):
                 if isinstance(block, dict) and block.get("type") == "text":
                     text = block["text"]
                     result["lastUserMessage"] = text[:120] + ("..." if len(text) > 120 else "")
+                    # Check for /compact command
+                    if "/compact" in text.lower():
+                        result["contextWindow"]["compacting"] = True
                     break
                 elif isinstance(block, str):
                     result["lastUserMessage"] = block[:120]
+                    # Check for /compact command
+                    if "/compact" in block.lower():
+                        result["contextWindow"]["compacting"] = True
                     break
 
         if entry_type == "assistant":
@@ -575,6 +611,16 @@ def _parse_session_tail(lines):
                 inp = usage.get("input_tokens", 0) + usage.get("cache_read_input_tokens", 0)
                 out = usage.get("output_tokens", 0)
                 result["tokens"] = {"input": inp, "output": out, "total": inp + out}
+                # Track context window: input tokens ≈ context window usage
+                prev_ctx = result["contextWindow"]["used"]
+                result["contextWindow"]["used"] = inp
+                # Detect compaction: 30%+ drop in input tokens between consecutive turns
+                if prev_ctx > 10000 and inp < prev_ctx * 0.7:
+                    result["contextWindow"]["compacting"] = True
+                else:
+                    # Reset compacting flag if no drop detected (unless /compact was called)
+                    if not result["contextWindow"]["compacting"]:
+                        result["contextWindow"]["compacting"] = False
             if msg.get("model"):
                 result["model"] = msg["model"]
 
@@ -752,6 +798,15 @@ def scan_sessions():
                 idle_secs = now - mtime
                 session_status = "active" if idle_secs < 60 else "idle"
 
+                # Map model to context limit and compute ratio
+                ctx = state["contextWindow"]
+                model_name = state["model"] or ""
+                for model_prefix, limit in MODEL_CONTEXT_LIMITS.items():
+                    if model_prefix in model_name:
+                        ctx["max"] = limit
+                        break
+                ctx["ratio"] = ctx["used"] / ctx["max"] if ctx["max"] > 0 else 0
+
                 agents.append({
                     "id": session_id,
                     "label": project_label,
@@ -764,6 +819,7 @@ def scan_sessions():
                     "goalId": None,
                     "tokens": state["tokens"],
                     "model": state["model"],
+                    "contextWindow": ctx,
                     "x": 0, "y": 0, "nodeRadius": 28,
                 })
 
@@ -795,6 +851,15 @@ def scan_sessions():
                         idle_secs_sa = now - sa_mtime
                         sa_status = "active" if idle_secs_sa < 60 else "idle"
 
+                        # Map model to context limit and compute ratio for subagent
+                        sa_ctx = sa_state["contextWindow"]
+                        sa_model_name = sa_state["model"] or ""
+                        for model_prefix, limit in MODEL_CONTEXT_LIMITS.items():
+                            if model_prefix in sa_model_name:
+                                sa_ctx["max"] = limit
+                                break
+                        sa_ctx["ratio"] = sa_ctx["used"] / sa_ctx["max"] if sa_ctx["max"] > 0 else 0
+
                         agents.append({
                             "id": sa_name,
                             "label": sa_label,
@@ -807,6 +872,7 @@ def scan_sessions():
                             "goalId": None,
                             "tokens": sa_state["tokens"],
                             "model": sa_state["model"],
+                            "contextWindow": sa_ctx,
                             "x": 0, "y": 0, "nodeRadius": 16,
                         })
 

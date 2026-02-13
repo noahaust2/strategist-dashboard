@@ -964,6 +964,17 @@ svg#main-viz {
 /* Agent Tree Nodes */
 .agent-node-bg { transition: all 0.3s ease; }
 .agent-node-ring { fill: none; stroke-width: 2; transition: all 0.3s ease; }
+.agent-context-arc { fill: none; stroke-width: 2.5; stroke-linecap: round; pointer-events: none; transition: stroke 0.6s ease; }
+.agent-context-bg { fill: none; stroke-width: 2.5; pointer-events: none; }
+@keyframes compactPulse {
+  0% { stroke-opacity: 0.9; stroke-dashoffset: 0; }
+  50% { stroke-opacity: 0.4; }
+  100% { stroke-opacity: 0.9; stroke-dashoffset: -20; }
+}
+.agent-context-arc.compacting {
+  animation: compactPulse 0.8s ease-in-out infinite;
+  stroke-dasharray: 6 4;
+}
 
 .agent-node-label {
   font-family: var(--font-sans);
@@ -4192,6 +4203,8 @@ svg#main-viz {
     entering.append('circle').attr('class', 'agent-node-bg');
     entering.append('path').attr('class', 'agent-mode-arc').attr('fill', 'none');
     entering.append('circle').attr('class', 'agent-node-ring');
+    entering.append('circle').attr('class', 'agent-context-bg');
+    entering.append('path').attr('class', 'agent-context-arc');
     entering.append('text').attr('class', 'agent-node-label');
     entering.append('text').attr('class', 'agent-node-action');
     entering.append('rect').attr('class', 'agent-tool-bg');
@@ -4270,6 +4283,37 @@ svg#main-viz {
         return `rgba(180,195,220,${intensity})`;
       });
 
+    // Context window background ring (dim track)
+    merged.select('.agent-context-bg')
+      .attr('r', d => d.nodeRadius + 6)
+      .attr('stroke', 'rgba(100,110,130,0.12)')
+      .attr('stroke-width', 2.5);
+
+    // Context window usage arc — fills clockwise from 12 o'clock
+    merged.select('.agent-context-arc')
+      .attr('d', d => {
+        const ctx = d.contextWindow;
+        if (!ctx || ctx.ratio <= 0.005) return '';
+        const r = d.nodeRadius + 6;
+        const ratio = Math.min(ctx.ratio, 0.999);
+        const angle = ratio * Math.PI * 2;
+        const startX = 0, startY = -r;
+        const endX = Math.sin(angle) * r;
+        const endY = -Math.cos(angle) * r;
+        const largeArc = angle > Math.PI ? 1 : 0;
+        return `M${startX},${startY} A${r},${r} 0 ${largeArc},1 ${endX},${endY}`;
+      })
+      .attr('stroke', d => {
+        const ctx = d.contextWindow;
+        if (!ctx) return 'rgba(52,211,153,0.6)';
+        if (ctx.ratio > 0.85) return 'rgba(239,68,68,0.8)';
+        if (ctx.ratio > 0.65) return 'rgba(245,158,11,0.7)';
+        return 'rgba(52,211,153,0.6)';
+      })
+      .attr('stroke-width', 2.5)
+      .attr('stroke-linecap', 'round')
+      .classed('compacting', d => d.contextWindow && d.contextWindow.compacting);
+
     // Mode indicator — rotating scan arc when researching (reading, searching, fetching)
     // Building needs no extra indicator — data flow particles along links already show it
     const RESEARCH_TOOLS = new Set(['Read', 'Grep', 'Glob', 'WebSearch', 'WebFetch', 'Task']);
@@ -4320,7 +4364,9 @@ svg#main-viz {
       .text(d => d.label);
 
     // Tool badge — show currentAction for detail (e.g. "Read: STATE.md")
+    // Idle agents show empty badge (stale actions are misleading)
     const badgeText = d => {
+      if (d.status === 'idle') return '';
       if (d.currentAction && d.currentAction.length > 1) return d.currentAction;
       if (d.currentTool) return d.currentTool + '()';
       return '';
@@ -4549,17 +4595,29 @@ svg#main-viz {
       goalEl.style.color = '';
     }
 
-    document.getElementById('agent-detail-action').textContent = agent.currentAction || 'Idle';
-    document.getElementById('agent-detail-tool').textContent = agent.currentTool ? agent.currentTool + '()' : 'No active tool';
+    document.getElementById('agent-detail-action').textContent =
+      agent.status === 'idle' ? 'Idle' : (agent.currentAction || 'Working...');
+    document.getElementById('agent-detail-tool').textContent =
+      agent.status === 'idle' ? 'No active tool' : (agent.currentTool ? agent.currentTool + '()' : 'No active tool');
 
     // Model info
     const modelEl = document.getElementById('agent-detail-model');
     modelEl.textContent = agent.model ? agent.model.replace('claude-', '').replace('-20251001', '').replace('-20250929', '') : '';
 
     const tok = agent.tokens;
-    document.getElementById('agent-detail-tokens').textContent = tok
+    const tokText = tok
       ? `${(tok.total / 1000).toFixed(1)}K tokens (${(tok.input / 1000).toFixed(1)}K in / ${(tok.output / 1000).toFixed(1)}K out)`
       : '';
+
+    // Context window info
+    const ctx = agent.contextWindow;
+    let ctxText = '';
+    if (ctx && ctx.ratio > 0.005) {
+      const pct = (ctx.ratio * 100).toFixed(0);
+      ctxText = ` | Context: ${pct}%`;
+      if (ctx.compacting) ctxText += ' (compacting)';
+    }
+    document.getElementById('agent-detail-tokens').textContent = tokText + ctxText;
 
     // Always populate timeline and reasoning
     populateAgentTimeline(agent);
@@ -5574,6 +5632,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'Task', goalId: 'audience',
       currentAction: 'Coordinating content pipeline',
       tokens: { input: 45200, output: 12800, total: 58000 },
+      contextWindow: { used: 94000, max: 200000, ratio: 0.47, compacting: false },
       recentTools: ['Read: STATE.md', 'Read: GOALS.md', 'Task: spawn content-writer', 'Task: spawn research-scout', 'Read: METRICS.md'],
       reasoning: [
         { phase: 'READ', text: 'Checked STATE.md — system healthy, no blockers', status: 'done', time: fmt(90) },
@@ -5590,6 +5649,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'Write', goalId: 'audience',
       currentAction: 'Drafting blog post on AI applications',
       tokens: { input: 22000, output: 8500, total: 30500 },
+      contextWindow: { used: 152000, max: 200000, ratio: 0.76, compacting: false },
       recentTools: ['Read: blog-outline.md', 'WebSearch: AI trends 2026', 'Write: draft-post.md', 'Edit: draft-post.md'],
       reasoning: [
         { phase: 'READ', text: 'Read blog-outline.md — 5 sections planned', status: 'done', time: fmt(55) },
@@ -5605,6 +5665,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'Write', goalId: 'audience',
       currentAction: 'Writing intro section',
       tokens: { input: 6000, output: 3200, total: 9200 },
+      contextWindow: { used: 38000, max: 200000, ratio: 0.19, compacting: false },
       recentTools: ['Read: draft-post.md', 'Write: intro-section.md', 'Edit: intro-section.md'],
       focus: 1.0, // 100% focused on this one blog post
       nodeRadius: 16,
@@ -5614,6 +5675,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'Grep', goalId: 'audience',
       currentAction: 'Analyzing keyword density',
       tokens: { input: 4800, output: 1600, total: 6400 },
+      contextWindow: { used: 28000, max: 200000, ratio: 0.14, compacting: false },
       recentTools: ['Grep: keyword density', 'Read: seo-config.json', 'Grep: meta tags'],
       focus: 0.95, // nearly all attention on SEO for this goal
       nodeRadius: 16,
@@ -5623,6 +5685,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'WebSearch', goalId: 'research',
       currentAction: 'Searching competitor strategies',
       tokens: { input: 15000, output: 4200, total: 19200 },
+      contextWindow: { used: 178000, max: 200000, ratio: 0.89, compacting: true },
       recentTools: ['WebSearch: competitor analysis', 'WebFetch: market data', 'Read: research-notes.md', 'Write: findings.md'],
       reasoning: [
         { phase: 'READ', text: 'Research goal stale — 48h since last commit', status: 'done', time: fmt(70) },
@@ -5638,6 +5701,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'Read', goalId: 'research',
       currentAction: 'Reading embedding analysis paper',
       tokens: { input: 8000, output: 2100, total: 10100 },
+      contextWindow: { used: 62000, max: 200000, ratio: 0.31, compacting: false },
       recentTools: ['WebFetch: arxiv paper', 'Read: embedding-analysis.pdf', 'Write: summary.md'],
       reasoning: [
         { phase: 'READ', text: 'Found 3 relevant papers on vector embeddings for content recommendation', status: 'done', time: fmt(52) },
@@ -5651,6 +5715,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'WebFetch', goalId: 'research',
       currentAction: 'Fetching trending topics API',
       tokens: { input: 5200, output: 1800, total: 7000 },
+      contextWindow: { used: 44000, max: 200000, ratio: 0.22, compacting: false },
       recentTools: ['WebFetch: trends API', 'Grep: trending keywords'],
       focus: 0.75, // trends feed research but also content
       nodeRadius: 16,
@@ -5660,6 +5725,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'Edit', goalId: 'infrastructure',
       currentAction: 'Implementing RSS parser',
       tokens: { input: 18000, output: 9200, total: 27200 },
+      contextWindow: { used: 116000, max: 200000, ratio: 0.58, compacting: false },
       focus: 0.8, // building infra but RSS parser also serves content
       nodeRadius: 22,
     });
@@ -5668,6 +5734,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'Bash', goalId: 'infrastructure',
       currentAction: 'Running integration tests',
       tokens: { input: 3200, output: 800, total: 4000 },
+      contextWindow: { used: 18000, max: 200000, ratio: 0.09, compacting: false },
       focus: 1.0, // purely testing infrastructure code
       nodeRadius: 16,
     });
@@ -5676,6 +5743,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'Read', goalId: 'revenue',
       currentAction: 'Analyzing engagement metrics',
       tokens: { input: 11000, output: 3400, total: 14400 },
+      contextWindow: { used: 72000, max: 200000, ratio: 0.36, compacting: false },
       focus: 0.5, // metrics feed revenue decisions but also inform other goals
       nodeRadius: 22,
     });

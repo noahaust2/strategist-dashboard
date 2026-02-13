@@ -4009,29 +4009,52 @@ svg#main-viz {
         return t.length > 28 ? t.slice(0, 26) + '...' : t;
       });
 
-    // Subtask particles — tiny dots orbiting inside each node, one per recent action (only at working+ zoom)
+    // Inner complexity — two orbit rings showing tool actions and reasoning depth
     merged.each(function(d) {
-      const tools = d.recentTools || [];
-      const items = state.zoom > 0.8 ? tools.slice(-6) : []; // hide at macro zoom
       const g = d3.select(this);
-      const dots = g.selectAll('.subtask-dot').data(items, (t, i) => d.id + '-st-' + i);
-      const entering2 = dots.enter().append('circle').attr('class', 'subtask-dot')
-        .attr('r', 1.5)
-        .attr('fill', 'rgba(220,230,250,0.6)')
-        .attr('pointer-events', 'none');
-      entering2.merge(dots)
+      const tools = d.recentTools || [];
+      const reasons = d.reasoning || [];
+      const showInner = state.zoom > 0.8;
+
+      // Outer orbit: tool action dots (cyan, larger)
+      const toolItems = showInner ? tools.slice(-6) : [];
+      const toolDots = g.selectAll('.subtask-dot').data(toolItems, (t, i) => d.id + '-st-' + i);
+      const tEnter = toolDots.enter().append('circle').attr('class', 'subtask-dot')
+        .attr('r', 1.5).attr('fill', 'rgba(220,230,250,0.6)').attr('pointer-events', 'none');
+      tEnter.merge(toolDots)
         .attr('cx', (t, i) => {
-          const orbitR = d.nodeRadius * 0.55;
-          const angle = (i / Math.max(items.length, 1)) * Math.PI * 2 + state.time * 0.02;
+          const orbitR = d.nodeRadius * 0.6;
+          const angle = (i / Math.max(toolItems.length, 1)) * Math.PI * 2 + state.time * 0.02;
           return Math.cos(angle) * orbitR;
         })
         .attr('cy', (t, i) => {
-          const orbitR = d.nodeRadius * 0.55;
-          const angle = (i / Math.max(items.length, 1)) * Math.PI * 2 + state.time * 0.02;
+          const orbitR = d.nodeRadius * 0.6;
+          const angle = (i / Math.max(toolItems.length, 1)) * Math.PI * 2 + state.time * 0.02;
           return Math.sin(angle) * orbitR;
         })
         .attr('opacity', d.status === 'active' ? 0.7 : 0.3);
-      dots.exit().remove();
+      toolDots.exit().remove();
+
+      // Inner orbit: reasoning dots (violet, smaller, orbit opposite direction)
+      const reasonItems = showInner ? reasons.slice(-8) : [];
+      const rDots = g.selectAll('.reason-dot').data(reasonItems, (r, i) => d.id + '-rd-' + i);
+      const rEnter = rDots.enter().append('circle').attr('class', 'reason-dot')
+        .attr('r', 1).attr('fill', 'rgba(167,139,250,0.7)').attr('pointer-events', 'none');
+      rEnter.merge(rDots)
+        .attr('cx', (r, i) => {
+          const orbitR = d.nodeRadius * 0.32;
+          const angle = (i / Math.max(reasonItems.length, 1)) * Math.PI * 2 - state.time * 0.015;
+          return Math.cos(angle) * orbitR;
+        })
+        .attr('cy', (r, i) => {
+          const orbitR = d.nodeRadius * 0.32;
+          const angle = (i / Math.max(reasonItems.length, 1)) * Math.PI * 2 - state.time * 0.015;
+          return Math.sin(angle) * orbitR;
+        })
+        .attr('r', r => r.status === 'active' ? 1.5 : 1)
+        .attr('fill', r => r.status === 'active' ? 'rgba(167,139,250,0.9)' : 'rgba(167,139,250,0.5)')
+        .attr('opacity', d.status === 'active' ? 0.8 : 0.3);
+      rDots.exit().remove();
     });
 
     // Microscope mode (zoom >= 4): inline annotations beside each agent

@@ -2324,7 +2324,10 @@ svg#main-viz {
       });
     });
 
-    const breathe = 0.25 + Math.sin(state.time * 0.015) * 0.1;
+    // Growth vitality modulates entire synapse tree visibility
+    const growth = computeGrowthVitality();
+    const treeBrightness = 0.3 + growth.vitality * 0.7; // 0.3 when dormant, 1.0 when surging
+    const breathe = (0.25 + Math.sin(state.time * 0.015) * 0.1) * treeBrightness;
 
     // Render dendrites (curved paths for organic coral feel)
     const dLinks = synapseTreeLayer.selectAll('.synapse-dendrite').data(dendrites, d => d.id);
@@ -2344,7 +2347,7 @@ svg#main-viz {
         return c.glow + (d.isRoot ? breathe * 0.4 : breathe * 0.6) + ')';
       })
       .attr('stroke-width', d => {
-        if (d.target.isNew) return 1.8;
+        if (d.target.isNew) return 2.2;
         return d.isRoot ? 1.2 : 0.7;
       })
       .attr('opacity', d => d.target.isNew ? 0.9 : breathe);
@@ -2358,9 +2361,12 @@ svg#main-viz {
       .on('mouseenter', function(event, d) {
         const tooltip = document.getElementById('tooltip');
         const typeLabel = d.type.charAt(0).toUpperCase() + d.type.slice(1);
-        tooltip.querySelector('.tt-message').textContent = d.message || typeLabel + ' modification';
+        const isRecursive = ['rules', 'identity', 'review', 'strategy'].includes(d.type);
+        const prefix = isRecursive ? '\u21BA ' : ''; // ↺ for recursive
+        tooltip.querySelector('.tt-message').textContent = prefix + (d.message || typeLabel + ' modification');
         const ageLabel = d.age < 1 ? 'today' : d.age < 7 ? Math.floor(d.age) + ' days ago' : Math.floor(d.age / 7) + ' weeks ago';
-        tooltip.querySelector('.tt-meta').textContent = typeLabel + ' \u2022 ' + ageLabel;
+        const recursiveLabel = isRecursive ? 'Self-modification' : 'Knowledge gained';
+        tooltip.querySelector('.tt-meta').textContent = recursiveLabel + ' \u2022 ' + typeLabel + ' \u2022 ' + ageLabel;
         tooltip.style.left = event.clientX + 12 + 'px';
         tooltip.style.top = event.clientY - 10 + 'px';
         tooltip.classList.add('visible');
@@ -2373,18 +2379,60 @@ svg#main-viz {
     sEnter.merge(sNodes)
       .attr('cx', d => d.x).attr('cy', d => d.y)
       .attr('r', d => {
-        if (d.isNew) return 5 + Math.sin(state.time * 0.1) * 1.5;
+        if (d.age < 1) return 6 + Math.sin(state.time * 0.1) * 2; // today: large, pulsing
+        if (d.age < 3) return 4.5 + Math.sin(state.time * 0.06) * 1; // recent: medium pulse
         const ageFade = Math.max(0.5, 1 - d.age * 0.012);
         return 2.5 + ageFade * 2;
       })
       .attr('fill', d => {
         const c = SYNAPSE_COLORS[d.type] || SYNAPSE_COLORS.other;
-        const ageBright = d.isNew ? 0.9 : Math.max(0.15, 0.6 - d.age * 0.006);
-        return c.glow + ageBright + ')';
+        // Fresh learning glows bright, old knowledge dims
+        const freshGlow = d.age < 1 ? 0.95 : d.age < 3 ? 0.7 : d.age < 7 ? 0.5 : Math.max(0.1, 0.4 - d.age * 0.004);
+        return c.glow + (freshGlow * treeBrightness) + ')';
       })
-      .attr('stroke', d => d.isNew ? (SYNAPSE_COLORS[d.type] || SYNAPSE_COLORS.other).base : 'none')
-      .attr('stroke-width', d => d.isNew ? 1.5 : 0);
+      .attr('stroke', d => {
+        if (d.age < 1) return (SYNAPSE_COLORS[d.type] || SYNAPSE_COLORS.other).base;
+        if (d.age < 3) return (SYNAPSE_COLORS[d.type] || SYNAPSE_COLORS.other).glow + '0.4)';
+        return 'none';
+      })
+      .attr('stroke-width', d => d.age < 1 ? 2 : d.age < 3 ? 1 : 0)
+      .attr('filter', d => {
+        // Glow halo for very fresh learning (< 1 day)
+        if (d.age < 1) {
+          const typeKey = Object.keys(PALETTE).find(k => PALETTE[k].base === (SYNAPSE_COLORS[d.type] || {}).base);
+          return typeKey ? `url(#glow-${typeKey})` : 'none';
+        }
+        return 'none';
+      });
     sNodes.exit().remove();
+
+    // Recursive learning indicators — pulsing echo rings on self-modification synapses
+    // These represent the system learning about itself (rules, identity, review, strategy)
+    const RECURSIVE_TYPES = new Set(['rules', 'identity', 'review', 'strategy']);
+    const recursiveNodes = nodes.filter(n => RECURSIVE_TYPES.has(n.type) && n.age < 14);
+    const echoRings = synapseTreeLayer.selectAll('.synapse-echo').data(recursiveNodes, d => d.hash);
+
+    echoRings.enter()
+      .append('circle')
+      .attr('class', 'synapse-echo')
+      .attr('fill', 'none')
+      .merge(echoRings)
+      .attr('cx', d => d.x).attr('cy', d => d.y)
+      .attr('r', d => {
+        // Pulsing outward ring — creates "echo" effect of self-modification
+        const pulse = (state.time * 0.02 + d.index * 0.5) % 1;
+        return 8 + pulse * 18;
+      })
+      .attr('stroke', d => {
+        const c = SYNAPSE_COLORS[d.type] || SYNAPSE_COLORS.other;
+        const pulse = (state.time * 0.02 + d.index * 0.5) % 1;
+        return c.glow + (0.3 * (1 - pulse) * treeBrightness) + ')';
+      })
+      .attr('stroke-width', d => {
+        const pulse = (state.time * 0.02 + d.index * 0.5) % 1;
+        return 1.5 * (1 - pulse);
+      });
+    echoRings.exit().remove();
 
     // Synapse labels at high zoom — show commit message
     if (state.zoom > 2.5) {
@@ -4975,19 +5023,36 @@ Auth: tokens refreshed, no anomalies`;
     }
     const maxVal = Math.max(1, ...days);
 
+    // Learning acceleration: compare last 7 days to previous 7 days
+    const recentWeek = days.slice(7).reduce((a, b) => a + b, 0);
+    const previousWeek = days.slice(0, 7).reduce((a, b) => a + b, 0);
+    const accelerating = recentWeek > previousWeek * 1.2; // 20% faster = accelerating
+    const decelerating = recentWeek < previousWeek * 0.5 && previousWeek > 0; // 50% slower
+
     // Draw sparkline as a polyline
     const points = days.map((v, i) => {
-      const x = (i / 13) * 38 + 1;
+      const x = (i / 13) * 36 + 1;
       const y = 15 - (v / maxVal) * 13;
       return `${x},${y}`;
     }).join(' ');
 
     // Color based on vitality
     const color = growth.vitality > 0.5 ? '#34d399' : growth.vitality > 0.2 ? '#f59e0b' : '#606080';
-    svg.innerHTML = `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`;
 
-    label.textContent = growth.label;
-    label.style.color = color;
+    // Trend arrow: shows whether learning is accelerating
+    const arrowX = 38;
+    const arrowColor = accelerating ? '#34d399' : decelerating ? '#ef4444' : color;
+    const arrow = accelerating
+      ? `<polygon points="${arrowX},3 ${arrowX-2.5},8 ${arrowX+2.5},8" fill="${arrowColor}" opacity="0.8"/>`
+      : decelerating
+      ? `<polygon points="${arrowX},13 ${arrowX-2.5},8 ${arrowX+2.5},8" fill="${arrowColor}" opacity="0.8"/>`
+      : '';
+
+    svg.innerHTML = `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>${arrow}`;
+
+    const accelLabel = accelerating ? ' \u2191' : decelerating ? ' \u2193' : '';
+    label.textContent = growth.label + accelLabel;
+    label.style.color = arrowColor;
   }
 
   function modeLabel(mode) {

@@ -3847,16 +3847,24 @@ svg#main-viz {
 
     nodeGroups.exit().transition().duration(500).attr('opacity', 0).remove();
 
-    // Goal tendrils — only visible when agent is actively working on the goal
+    // Goal tendrils — connect to specific active/recent particle in the colony
     const goalTendrilData = agents
       .filter(a => a.goalId && state.colonies.has(a.goalId) && a.status === 'active')
       .map(a => {
         const colony = state.colonies.get(a.goalId);
+        // Target: the active particle, or the most recent one, or colony center
+        const activeP = colony.particles.find(p => p.isActive);
+        const recentP = colony.particles.length > 0
+          ? colony.particles.reduce((best, p) => p.age < best.age ? p : best)
+          : null;
+        const target = activeP || recentP;
         return {
           id: a.id + '-goal',
           agent: a,
           colony,
           colorKey: colony.colorKey,
+          tx: target ? target.x : colony.cx,
+          ty: target ? target.y : colony.cy,
         };
       });
 
@@ -3867,7 +3875,7 @@ svg#main-viz {
       .merge(goalGlows)
       .attr('d', d => {
         const ax = d.agent.x, ay = d.agent.y;
-        const gx = d.colony.cx, gy = d.colony.cy;
+        const gx = d.tx, gy = d.ty;
         const mx = (ax + gx) / 2, my = (ay + gy) / 2;
         const tcx = state._treeCx, tcy = state._treeCy;
         const cpx = mx - (tcx - mx) * 0.3;
@@ -3886,8 +3894,7 @@ svg#main-viz {
       .on('mouseenter', function(event, d) {
         const tooltip = document.getElementById('tooltip');
         tooltip.querySelector('.tt-message').textContent = d.agent.label + ' → ' + (d.colony.goal.name || d.colony.id);
-        const status = d.agent.status === 'active' ? 'Actively working on this goal' : 'Assigned to this goal';
-        tooltip.querySelector('.tt-meta').textContent = status;
+        tooltip.querySelector('.tt-meta').textContent = 'Actively working on this goal';
         tooltip.querySelector('.tt-stat.add').textContent = '';
         tooltip.querySelector('.tt-stat.del').textContent = '';
         tooltip.querySelector('.tt-stat.files').textContent = '';
@@ -3901,7 +3908,7 @@ svg#main-viz {
       .merge(goalTendrils)
       .attr('d', d => {
         const ax = d.agent.x, ay = d.agent.y;
-        const gx = d.colony.cx, gy = d.colony.cy;
+        const gx = d.tx, gy = d.ty;
         const mx = (ax + gx) / 2, my = (ay + gy) / 2;
         const tcx = state._treeCx, tcy = state._treeCy;
         const cpx = mx - (tcx - mx) * 0.3;

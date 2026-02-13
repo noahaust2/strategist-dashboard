@@ -2090,6 +2090,10 @@ svg#main-viz {
       state.pan.y = event.transform.y;
       zoomGroup.attr('transform', event.transform);
       updateZoomIndicator();
+      // Refresh hover detail if an agent is currently hovered
+      if (state._hoveredAgent) {
+        showAgentDetail(state._hoveredAgent, null);
+      }
     });
 
   svg.call(zoomBehavior);
@@ -4149,6 +4153,7 @@ svg#main-viz {
   const agentDetailEl = document.getElementById('agent-detail');
 
   function showAgentDetail(agent, event) {
+    state._hoveredAgent = agent;
     const det = agentDetailEl;
     const isZoomedIn = state.zoom >= 2;
 
@@ -4284,6 +4289,7 @@ svg#main-viz {
   }
 
   function hideAgentDetail() {
+    state._hoveredAgent = null;
     agentDetailEl.classList.remove('visible');
     agentDetailEl.classList.remove('zoomed-in');
   }

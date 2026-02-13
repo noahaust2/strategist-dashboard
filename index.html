@@ -3485,8 +3485,8 @@ svg#main-viz {
 
       if (a.goalId && state.colonies.has(a.goalId)) {
         const colony = state.colonies.get(a.goalId);
-        // Pull 15% toward goal colony when active, 5% when idle
-        const pull = a.status === 'active' ? 0.15 : 0.05;
+        // Pull toward goal colony — active agents drift noticeably, idle agents lean slightly
+        const pull = a.status === 'active' ? 0.3 : 0.12;
         targetX = a._baseX + (colony.cx - a._baseX) * pull;
         targetY = a._baseY + (colony.cy - a._baseY) * pull;
       }

@@ -1273,8 +1273,7 @@ svg#main-viz {
 /* Help button (re-open guide) */
 #help-btn {
   position: fixed;
-  bottom: 20px; left: 50%;
-  transform: translateX(-50%);
+  bottom: 16px; right: 16px;
   z-index: 100;
   width: 28px; height: 28px;
   border-radius: 50%;
@@ -1502,25 +1501,16 @@ svg#main-viz {
 
 <!-- Legend -->
 <div id="legend">
-  <div class="legend-group">
-    <span class="legend-group-title">Background</span>
-    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-cyan)"></span>Read phase</span>
-    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-amber)"></span>Decide</span>
-    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-blue)"></span>Execute</span>
-    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-green)"></span>Verify</span>
-  </div>
-  <div class="legend-divider"></div>
   <div class="legend-group" id="legend-goals">
-    <span class="legend-group-title">Goals (colonies + outlines)</span>
+    <span class="legend-group-title">Goals</span>
   </div>
   <div class="legend-divider"></div>
   <div class="legend-group">
     <span class="legend-group-title">Signals</span>
-    <span class="legend-item" title="Agent node outlines match their assigned goal color">Outline = goal</span>
-    <span class="legend-item" title="Rotating purple arc = agent is reading/searching">Scan arc = research</span>
-    <span class="legend-item" title="Nodes breathe faster when active, slow when stalled">Breathing = activity</span>
-    <span class="legend-item" title="Idle agents fade over time">Opacity = freshness</span>
-    <span class="legend-item" title="Distance to goal = token investment. More tokens spent = physically closer">Drift = investment</span>
+    <span class="legend-item" title="Node outline color matches assigned goal">Color = goal</span>
+    <span class="legend-item" title="Rotating purple arc = reading/searching">Scan = research</span>
+    <span class="legend-item" title="Nodes breathe faster when active">Breathing = activity</span>
+    <span class="legend-item" title="Closer to goal = more tokens invested">Distance = investment</span>
     <span class="legend-item" title="Bigger nodes have used more tokens">Size = workload</span>
   </div>
 </div>
@@ -1899,19 +1889,17 @@ svg#main-viz {
     bgCtx.fillStyle = '#0a0a0f';
     bgCtx.fillRect(0, 0, w, h);
 
-    const phase = state.agentPhase || 'read';
-    const nebula = PHASE_NEBULA[phase] || PHASE_NEBULA.read;
     const mood = HEALTH_MOOD[state.health] || HEALTH_MOOD.green;
-
-    // Phase-aware nebula glow at center (where agents live)
+    // Neutral ambient nebula — not phase-colored (color = goals only)
+    const nebR = 60, nebG = 70, nebB = 110;
     const cx = w / 2, cy = h / 2;
     const nebulaRadius = Math.min(w, h) * 0.5;
     const nebulaPulse = 0.015 + Math.sin(t * 0.3 * mood.pulseSpeed) * 0.008;
     const nebulaAlpha = nebulaPulse * mood.nebulaIntensity;
 
     const grad = bgCtx.createRadialGradient(cx, cy, 0, cx, cy, nebulaRadius);
-    grad.addColorStop(0, `rgba(${nebula.r},${nebula.g},${nebula.b},${nebulaAlpha * 1.5})`);
-    grad.addColorStop(0.4, `rgba(${nebula.r},${nebula.g},${nebula.b},${nebulaAlpha * 0.5})`);
+    grad.addColorStop(0, `rgba(${nebR},${nebG},${nebB},${nebulaAlpha * 1.5})`);
+    grad.addColorStop(0.4, `rgba(${nebR},${nebG},${nebB},${nebulaAlpha * 0.5})`);
     grad.addColorStop(1, 'transparent');
     bgCtx.fillStyle = grad;
     bgCtx.fillRect(0, 0, w, h);
@@ -1921,7 +1909,7 @@ svg#main-viz {
     const nx2 = cx + Math.sin(drift) * nebulaRadius * 0.3;
     const ny2 = cy + Math.cos(drift * 0.7) * nebulaRadius * 0.2;
     const grad2 = bgCtx.createRadialGradient(nx2, ny2, 0, nx2, ny2, nebulaRadius * 0.6);
-    grad2.addColorStop(0, `rgba(${nebula.r},${nebula.g},${nebula.b},${nebulaAlpha * 0.4})`);
+    grad2.addColorStop(0, `rgba(${nebR},${nebG},${nebB},${nebulaAlpha * 0.4})`);
     grad2.addColorStop(1, 'transparent');
     bgCtx.fillStyle = grad2;
     bgCtx.fillRect(0, 0, w, h);
@@ -2585,12 +2573,10 @@ svg#main-viz {
     merged.select('.doc-ring')
       .attr('r', d => 12 + d.freshness * 4)
       .attr('fill', d => {
-        const phaseNeb = PHASE_NEBULA[state.agentPhase || 'read'] || PHASE_NEBULA.read;
-        return `rgba(${phaseNeb.r},${phaseNeb.g},${phaseNeb.b},${0.04 + d.freshness * 0.08})`;
+        return `rgba(140,160,200,${0.04 + d.freshness * 0.08})`;
       })
       .attr('stroke', d => {
-        const phaseNeb = PHASE_NEBULA[state.agentPhase || 'read'] || PHASE_NEBULA.read;
-        return `rgba(${phaseNeb.r},${phaseNeb.g},${phaseNeb.b},${0.1 + d.freshness * 0.3})`;
+        return `rgba(140,160,200,${0.1 + d.freshness * 0.3})`;
       })
       .attr('stroke-width', d => 0.5 + d.freshness * 1);
 
@@ -2601,8 +2587,7 @@ svg#main-viz {
       .attr('font-size', 10)
       .attr('font-weight', 600)
       .attr('fill', d => {
-        const phaseNeb = PHASE_NEBULA[state.agentPhase || 'read'] || PHASE_NEBULA.read;
-        return `rgba(${phaseNeb.r},${phaseNeb.g},${phaseNeb.b},${0.25 + d.freshness * 0.5})`;
+        return `rgba(140,160,200,${0.25 + d.freshness * 0.5})`;
       })
       .text(d => d.icon);
 
@@ -2627,8 +2612,7 @@ svg#main-viz {
       .attr('x1', d => d.agent.x).attr('y1', d => d.agent.y)
       .attr('x2', d => d.doc.x).attr('y2', d => d.doc.y)
       .attr('stroke', d => {
-        const phaseNeb = PHASE_NEBULA[state.agentPhase || 'read'] || PHASE_NEBULA.read;
-        return `rgba(${phaseNeb.r},${phaseNeb.g},${phaseNeb.b},0.12)`;
+        return `rgba(140,160,200,0.12)`;
       })
       .attr('stroke-width', 0.8)
       .attr('stroke-dasharray', '3,6');
@@ -3614,9 +3598,8 @@ svg#main-viz {
     const hbSpeed = state.health === 'green' ? 0.015 : state.health === 'yellow' ? 0.03 : 0.06;
     const hbPhase = (state.time * hbSpeed) % 1;
     const hbMaxR = Math.min(state.width, state.height) * 0.3;
-    const phaseNeb = PHASE_NEBULA[state.agentPhase || 'read'] || PHASE_NEBULA.read;
-    // Heartbeat color: phase-colored when healthy, shifts toward warning colors when degraded
-    const hbColor = state.health === 'green' ? `${phaseNeb.r},${phaseNeb.g},${phaseNeb.b}`
+    // Heartbeat color: neutral when healthy, warning colors when degraded
+    const hbColor = state.health === 'green' ? '140,160,200'
       : state.health === 'yellow' ? '234,179,8' : '239,68,68';
 
     let hbRing = agentTreeLayer.select('.health-heartbeat');

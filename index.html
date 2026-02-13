@@ -4219,6 +4219,35 @@ svg#main-viz {
     entering.append('circle').attr('class', 'agent-node-ring');
     entering.append('circle').attr('class', 'agent-context-bg');
     entering.append('path').attr('class', 'agent-context-arc');
+    entering.append('circle').attr('class', 'agent-context-hover-target')
+      .attr('fill', 'none').attr('stroke', 'transparent').attr('stroke-width', 12)
+      .style('pointer-events', 'stroke').style('cursor', 'default')
+      .on('mouseenter', function(event, d) {
+        event.stopPropagation();
+        const ctx = d.contextWindow;
+        if (!ctx || ctx.ratio <= 0.005) return;
+        const pct = (ctx.ratio * 100).toFixed(0);
+        const left = 100 - Math.round(ctx.ratio * 100);
+        const tooltip = document.getElementById('tooltip');
+        tooltip.querySelector('.tt-message').textContent = `Context: ${pct}% used, ${left}% left`;
+        const compLabel = ctx.compacting ? 'Compacting...' : '';
+        const tokLabel = ctx.used && ctx.max ? `${Math.round(ctx.used / 1000)}K / ${Math.round(ctx.max / 1000)}K tokens` : '';
+        tooltip.querySelector('.tt-meta').textContent = [tokLabel, compLabel].filter(Boolean).join(' \u2022 ');
+        tooltip.querySelector('.tt-stat.add').textContent = '';
+        tooltip.querySelector('.tt-stat.del').textContent = '';
+        tooltip.querySelector('.tt-stat.files').textContent = '';
+        tooltip.style.left = event.clientX + 12 + 'px';
+        tooltip.style.top = event.clientY - 10 + 'px';
+        tooltip.classList.add('visible');
+      })
+      .on('mousemove', function(event) {
+        const tooltip = document.getElementById('tooltip');
+        tooltip.style.left = event.clientX + 12 + 'px';
+        tooltip.style.top = event.clientY - 10 + 'px';
+      })
+      .on('mouseleave', function() {
+        document.getElementById('tooltip').classList.remove('visible');
+      });
     entering.append('text').attr('class', 'agent-node-label');
     entering.append('text').attr('class', 'agent-node-action');
     entering.append('rect').attr('class', 'agent-tool-bg');
@@ -4327,6 +4356,11 @@ svg#main-viz {
       .attr('stroke-width', 2.5)
       .attr('stroke-linecap', 'round')
       .classed('compacting', d => d.contextWindow && d.contextWindow.compacting);
+
+    // Context arc hover target — invisible wide ring for tooltip interaction
+    merged.select('.agent-context-hover-target')
+      .attr('r', d => d.nodeRadius + 6)
+      .attr('visibility', d => d.contextWindow && d.contextWindow.ratio > 0.005 ? 'visible' : 'hidden');
 
     // Mode indicator — rotating scan arc when researching (reading, searching, fetching)
     // Building needs no extra indicator — data flow particles along links already show it

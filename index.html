@@ -1941,8 +1941,8 @@ svg#main-viz {
     const total = (state.context.system || 0) + (state.context.conversation || 0) +
                   (state.context.tools || 0) + (state.context.thinking || 0);
     const ctxPct = Math.min(1, total / (state.context.max || 200000));
-    if (ctxPct > 0.3) {
-      const vignetteStrength = (ctxPct - 0.3) * 0.6; // 0 to ~0.42
+    if (ctxPct > 0.5) {
+      const vignetteStrength = (ctxPct - 0.5) * 0.5; // 0 to ~0.25, subtle until critical
       const vGrad = bgCtx.createRadialGradient(cx, cy, nebulaRadius * 0.5, cx, cy, Math.max(w, h) * 0.7);
       vGrad.addColorStop(0, 'transparent');
       vGrad.addColorStop(1, `rgba(5,5,10,${vignetteStrength})`);
@@ -2351,7 +2351,7 @@ svg#main-viz {
 
     // Growth vitality modulates entire synapse tree visibility
     const growth = computeGrowthVitality();
-    const treeBrightness = 0.3 + growth.vitality * 0.7; // 0.3 when dormant, 1.0 when surging
+    const treeBrightness = 0.5 + growth.vitality * 0.5; // 0.5 when dormant, 1.0 when surging
     const breathe = (0.25 + Math.sin(state.time * 0.015) * 0.1) * treeBrightness;
 
     // Render dendrites (curved paths for organic coral feel)
@@ -3791,7 +3791,17 @@ svg#main-viz {
       .attr('fill', d => d.status === 'active' ? 'rgba(230,235,245,0.95)' : 'rgba(200,210,225,0.7)')
       .attr('font-size', d => d.nodeRadius > 30 ? 13 : d.nodeRadius > 24 ? 11 : 9)
       .attr('opacity', 1)
-      .text(d => d.label.length > 12 ? d.label.split(' ').map(w => w[0]).join('') : d.label);
+      .text(d => {
+        if (d.label.length <= 12) return d.label;
+        // Try initials if multi-word
+        const words = d.label.split(/[\s_-]+/);
+        if (words.length > 1) return words.map(w => w[0]).join('').toUpperCase();
+        // Single long word: try camelCase split
+        const camel = d.label.replace(/([a-z])([A-Z])/g, '$1 $2').split(' ');
+        if (camel.length > 1) return camel.map(w => w[0]).join('').toUpperCase();
+        // Fallback: truncate
+        return d.label.slice(0, 10) + '\u2026';
+      });
 
     // Full name below circle — reveals on zoom
     merged.select('.agent-node-action')

@@ -3402,6 +3402,15 @@ svg#main-viz {
   // ----------------------------------------------------------
   const AGENT_COLORS = ['blue', 'green', 'amber', 'cyan', 'rose'];
 
+  // Get color key for an agent — uses goal's colony color if assigned, else cycles palette
+  function agentColorKey(agent, agents) {
+    if (agent.goalId && state.colonies.has(agent.goalId)) {
+      const colony = state.colonies.get(agent.goalId);
+      return colony.colorKey || AGENT_COLORS[agents.indexOf(agent) % AGENT_COLORS.length];
+    }
+    return AGENT_COLORS[agents.indexOf(agent) % AGENT_COLORS.length];
+  }
+
   function layoutAgentTree() {
     const agents = Array.from(state.agents.values());
     if (agents.length === 0) return;
@@ -3622,7 +3631,7 @@ svg#main-viz {
       .merge(glowLinks)
       .attr('d', d => `M${d.source.x},${d.source.y} Q${d.cpx},${d.cpy} ${d.target.x},${d.target.y}`)
       .attr('stroke', d => {
-        const ck = AGENT_COLORS[agents.indexOf(d.target) % AGENT_COLORS.length];
+        const ck = agentColorKey(d.target, agents);
         const active = d.target.status === 'active';
         return PALETTE[ck].glow + (active ? '0.12)' : '0.04)');
       })
@@ -3652,7 +3661,7 @@ svg#main-viz {
       .merge(links)
       .attr('d', d => `M${d.source.x},${d.source.y} Q${d.cpx},${d.cpy} ${d.target.x},${d.target.y}`)
       .attr('stroke', d => {
-        const ck = AGENT_COLORS[agents.indexOf(d.target) % AGENT_COLORS.length];
+        const ck = agentColorKey(d.target, agents);
         const active = d.target.status === 'active';
         return PALETTE[ck].glow + (active ? '0.5)' : '0.2)');
       })
@@ -3669,7 +3678,7 @@ svg#main-viz {
       .attr('cx', d => bezierPoint(d.source.x, d.source.y, d.cpx, d.cpy, d.target.x, d.target.y, d.t).x)
       .attr('cy', d => bezierPoint(d.source.x, d.source.y, d.cpx, d.cpy, d.target.x, d.target.y, d.t).y)
       .attr('fill', d => {
-        const ck = AGENT_COLORS[agents.indexOf(d.target) % AGENT_COLORS.length];
+        const ck = agentColorKey(d.target, agents);
         return PALETTE[ck] ? PALETTE[ck].base : '#4a9eff';
       })
       .attr('opacity', d => 0.7 + Math.sin(d.t * Math.PI) * 0.3);
@@ -3718,12 +3727,12 @@ svg#main-viz {
         return d.status === 'active' ? base * breatheScale : base * 0.9;
       })
       .attr('fill', d => {
-        const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
+        const ck = agentColorKey(d, agents);
         const intensity = d.status === 'active' ? 0.1 : 0.03;
         return PALETTE[ck].glow + intensity + ')';
       })
       .attr('filter', d => {
-        const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
+        const ck = agentColorKey(d, agents);
         return d.status === 'active' ? `url(#glow-${ck})` : 'none';
       });
 
@@ -3733,7 +3742,7 @@ svg#main-viz {
         return d.status === 'active' ? base * breatheScale : base;
       })
       .attr('stroke', d => {
-        const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
+        const ck = agentColorKey(d, agents);
         return PALETTE[ck].base;
       })
       .attr('stroke-width', d => d.status === 'active' ? 2.5 : 1.5)
@@ -3742,7 +3751,7 @@ svg#main-viz {
         return d.status === 'done' ? 0.25 : 0.4;
       })
       .attr('fill', d => {
-        const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
+        const ck = agentColorKey(d, agents);
         const intensity = d.status === 'active' ? (0.15 + Math.sin(state.time * 0.04) * 0.05) : 0.06;
         return PALETTE[ck].glow + intensity + ')';
       });
@@ -3752,7 +3761,7 @@ svg#main-viz {
       .attr('y', 1)
       .attr('dominant-baseline', 'central')
       .attr('fill', d => {
-        const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
+        const ck = agentColorKey(d, agents);
         return PALETTE[ck].base;
       })
       .attr('font-size', d => d.nodeRadius > 30 ? 13 : d.nodeRadius > 24 ? 11 : 9)

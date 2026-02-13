@@ -1850,11 +1850,15 @@ svg#main-viz {
     const nebula = PHASE_NEBULA[phase] || PHASE_NEBULA.read;
     const mood = HEALTH_MOOD[state.health] || HEALTH_MOOD.green;
 
+    // Growth vitality boosts nebula energy — growing system = vibrant, stalled = dim
+    const growth = computeGrowthVitality();
+    const vitalityBoost = 0.5 + growth.vitality * 1.5; // 0.5 (dormant) to 2.0 (surging)
+
     // Phase-aware nebula glow at center (where agents live)
     const cx = w / 2, cy = h / 2;
     const nebulaRadius = Math.min(w, h) * 0.5;
     const nebulaPulse = 0.015 + Math.sin(t * 0.3 * mood.pulseSpeed) * 0.008;
-    const nebulaAlpha = nebulaPulse * mood.nebulaIntensity;
+    const nebulaAlpha = nebulaPulse * mood.nebulaIntensity * vitalityBoost;
 
     const grad = bgCtx.createRadialGradient(cx, cy, 0, cx, cy, nebulaRadius);
     grad.addColorStop(0, `rgba(${nebula.r},${nebula.g},${nebula.b},${nebulaAlpha * 1.5})`);
@@ -1872,15 +1876,6 @@ svg#main-viz {
     grad2.addColorStop(1, 'transparent');
     bgCtx.fillStyle = grad2;
     bgCtx.fillRect(0, 0, w, h);
-
-    // Subtle concentric rings for spatial depth (radar-like)
-    bgCtx.strokeStyle = `rgba(${nebula.r},${nebula.g},${nebula.b},0.015)`;
-    bgCtx.lineWidth = 0.5;
-    for (let r = 80; r < Math.max(w, h); r += 120) {
-      bgCtx.beginPath();
-      bgCtx.arc(cx, cy, r, 0, Math.PI * 2);
-      bgCtx.stroke();
-    }
 
     // Stars — brightness modulated by health mood
     for (const star of bgStars) {
@@ -2310,7 +2305,21 @@ svg#main-viz {
     // Render synapse nodes
     const sNodes = synapseTreeLayer.selectAll('.synapse-node').data(nodes, d => d.hash);
     const sEnter = sNodes.enter().append('circle').attr('class', 'synapse-node')
-      .attr('r', 0);
+      .attr('r', 0)
+      .style('cursor', 'pointer')
+      .on('mouseenter', function(event, d) {
+        const tooltip = document.getElementById('tooltip');
+        const typeLabel = d.type.charAt(0).toUpperCase() + d.type.slice(1);
+        tooltip.querySelector('.tt-message').textContent = d.message || typeLabel + ' modification';
+        const ageLabel = d.age < 1 ? 'today' : d.age < 7 ? Math.floor(d.age) + ' days ago' : Math.floor(d.age / 7) + ' weeks ago';
+        tooltip.querySelector('.tt-meta').textContent = typeLabel + ' \u2022 ' + ageLabel;
+        tooltip.style.left = event.clientX + 12 + 'px';
+        tooltip.style.top = event.clientY - 10 + 'px';
+        tooltip.classList.add('visible');
+      })
+      .on('mouseleave', function() {
+        document.getElementById('tooltip').classList.remove('visible');
+      });
     sEnter.transition().duration(800).attr('r', 4);
 
     sEnter.merge(sNodes)
@@ -2329,8 +2338,187 @@ svg#main-viz {
       .attr('stroke-width', d => d.isNew ? 1.5 : 0);
     sNodes.exit().remove();
 
-    // Remove old center label (synapses now integrated with agents)
+    // Synapse labels at high zoom — show commit message
+    if (state.zoom > 2.5) {
+      const sLabels = synapseTreeLayer.selectAll('.synapse-label').data(nodes, d => d.hash);
+      sLabels.enter().append('text').attr('class', 'synapse-label')
+        .attr('font-family', 'var(--font-mono)')
+        .attr('font-size', 8)
+        .attr('pointer-events', 'none')
+        .merge(sLabels)
+        .attr('x', d => d.x + 8).attr('y', d => d.y + 3)
+        .attr('fill', d => {
+          const c = SYNAPSE_COLORS[d.type] || SYNAPSE_COLORS.other;
+          return c.glow + '0.6)';
+        })
+        .text(d => {
+          const msg = d.message || '';
+          return msg.length > 30 ? msg.slice(0, 28) + '..' : msg;
+        });
+      sLabels.exit().remove();
+    } else {
+      synapseTreeLayer.selectAll('.synapse-label').remove();
+    }
+
+    // Remove old center label
     synapseTreeLayer.selectAll('.synapse-count-label').remove();
+  }
+
+  // ----------------------------------------------------------
+  // Document Constellation — planning docs as orbital nodes
+  // ----------------------------------------------------------
+  const docsLayer = zoomGroup.append('g').attr('class', 'docs-layer');
+
+  // Doc type icons (single-char shorthand)
+  const DOC_ICONS = {
+    'GOALS.md': 'G', 'ASSETS.md': 'A', 'STATE.md': 'S',
+    'STRATEGY.md': 'T', 'OPPORTUNITIES.md': 'O', 'METRICS.md': 'M',
+    'LOG.md': 'L', 'RULES.md': 'R',
+  };
+
+  function renderDocuments() {
+    const docs = state.documents;
+    if (!docs || Object.keys(docs).length === 0) {
+      docsLayer.selectAll('*').remove();
+      return;
+    }
+
+    const cx = state._treeCx || state.width / 2;
+    const cy = state._treeCy || state.height / 2;
+    const now = Date.now();
+
+    // Build doc data array with positions in a loose orbit around agents
+    const docKeys = Object.keys(docs).filter(k => docs[k].exists);
+    const orbitRadius = Math.min(state.width, state.height) * 0.14;
+    const docData = docKeys.map((name, i) => {
+      const d = docs[name];
+      const angle = (2 * Math.PI * i) / docKeys.length - Math.PI / 2;
+      // Freshness: 0 (just modified) to 1 (very stale, >7 days)
+      const mtime = d.mtime ? new Date(d.mtime).getTime() : now - 86400000 * 7;
+      const hoursAgo = (now - mtime) / 3600000;
+      const freshness = Math.max(0, Math.min(1, 1 - hoursAgo / 168));
+
+      return {
+        name,
+        icon: DOC_ICONS[name] || name.charAt(0),
+        x: cx + Math.cos(angle) * orbitRadius,
+        y: cy + Math.sin(angle) * orbitRadius,
+        freshness,
+        hoursAgo,
+        size: d.size || 0,
+      };
+    });
+
+    // Doc nodes — small circles with letter inside
+    const docNodes = docsLayer.selectAll('.doc-node-g').data(docData, d => d.name);
+
+    const entering = docNodes.enter().append('g').attr('class', 'doc-node-g')
+      .style('cursor', 'pointer')
+      .on('mouseenter', function(event, d) {
+        // Show doc info in tooltip
+        const tooltip = document.getElementById('tooltip');
+        tooltip.querySelector('.tt-message').textContent = d.name;
+        const freshLabel = d.hoursAgo < 1 ? 'just now' : d.hoursAgo < 24 ? Math.floor(d.hoursAgo) + 'h ago' : Math.floor(d.hoursAgo / 24) + 'd ago';
+        tooltip.querySelector('.tt-meta').textContent = freshLabel + ' \u2022 ' + d.size + ' bytes';
+        tooltip.style.left = event.clientX + 12 + 'px';
+        tooltip.style.top = event.clientY - 10 + 'px';
+        tooltip.classList.add('visible');
+      })
+      .on('mouseleave', function() {
+        document.getElementById('tooltip').classList.remove('visible');
+      });
+
+    entering.append('circle').attr('class', 'doc-ring');
+    entering.append('text').attr('class', 'doc-icon');
+
+    const merged = entering.merge(docNodes);
+
+    // Subtle breathing offset
+    merged.attr('transform', (d, i) => {
+      const bx = Math.sin(state.time * 0.006 + i * 1.2) * 2;
+      const by = Math.cos(state.time * 0.005 + i * 0.9) * 2;
+      return `translate(${d.x + bx},${d.y + by})`;
+    });
+
+    merged.select('.doc-ring')
+      .attr('r', d => 12 + d.freshness * 4)
+      .attr('fill', d => {
+        const phaseNeb = PHASE_NEBULA[state.agentPhase || 'read'] || PHASE_NEBULA.read;
+        return `rgba(${phaseNeb.r},${phaseNeb.g},${phaseNeb.b},${0.04 + d.freshness * 0.08})`;
+      })
+      .attr('stroke', d => {
+        const phaseNeb = PHASE_NEBULA[state.agentPhase || 'read'] || PHASE_NEBULA.read;
+        return `rgba(${phaseNeb.r},${phaseNeb.g},${phaseNeb.b},${0.1 + d.freshness * 0.3})`;
+      })
+      .attr('stroke-width', d => 0.5 + d.freshness * 1);
+
+    merged.select('.doc-icon')
+      .attr('text-anchor', 'middle')
+      .attr('dominant-baseline', 'central')
+      .attr('font-family', 'var(--font-mono)')
+      .attr('font-size', 10)
+      .attr('font-weight', 600)
+      .attr('fill', d => {
+        const phaseNeb = PHASE_NEBULA[state.agentPhase || 'read'] || PHASE_NEBULA.read;
+        return `rgba(${phaseNeb.r},${phaseNeb.g},${phaseNeb.b},${0.25 + d.freshness * 0.5})`;
+      })
+      .text(d => d.icon);
+
+    docNodes.exit().remove();
+
+    // Connection lines from recent tool calls to docs
+    const recentDocCalls = (state.toolCalls || []).filter(tc =>
+      (tc.tool === 'Read' || tc.tool === 'Write' || tc.tool === 'Edit') &&
+      tc.target && docKeys.some(dk => tc.target.includes(dk.replace('.md', '')))
+    ).slice(0, 5);
+
+    const docCallData = recentDocCalls.map(tc => {
+      const agent = state.agents.get(tc.agent);
+      const matchDoc = docData.find(d => tc.target.includes(d.name.replace('.md', '')));
+      if (!agent || !matchDoc) return null;
+      return { id: tc.id + '-doc', agent, doc: matchDoc, tool: tc.tool };
+    }).filter(Boolean);
+
+    const docLinks = docsLayer.selectAll('.doc-interaction').data(docCallData, d => d.id);
+    docLinks.enter().append('line').attr('class', 'doc-interaction')
+      .merge(docLinks)
+      .attr('x1', d => d.agent.x).attr('y1', d => d.agent.y)
+      .attr('x2', d => d.doc.x).attr('y2', d => d.doc.y)
+      .attr('stroke', d => {
+        const phaseNeb = PHASE_NEBULA[state.agentPhase || 'read'] || PHASE_NEBULA.read;
+        return `rgba(${phaseNeb.r},${phaseNeb.g},${phaseNeb.b},0.12)`;
+      })
+      .attr('stroke-width', 0.8)
+      .attr('stroke-dasharray', '3,6');
+    docLinks.exit().remove();
+  }
+
+  // ----------------------------------------------------------
+  // Growth Vitality — synapse rate drives canvas energy
+  // ----------------------------------------------------------
+  function computeGrowthVitality() {
+    const synapses = state.synapses;
+    if (synapses.length === 0) return { rate: 0, vitality: 0, label: 'dormant' };
+
+    const now = Date.now();
+    // Count synapses from last 7 days, 24 hours, and total
+    const week = synapses.filter(s => s.age < 7).length;
+    const day = synapses.filter(s => s.age < 1).length;
+    const total = synapses.length;
+
+    // Vitality: 0-1 based on recent learning rate
+    // High vitality = many recent synapses relative to total
+    const ratePerDay = week / 7;
+    const vitality = Math.min(1, ratePerDay / 3); // 3+ per day = max vitality
+
+    let label;
+    if (day >= 3) label = 'surging';
+    else if (day >= 1) label = 'active';
+    else if (week >= 3) label = 'steady';
+    else if (total > 0) label = 'slowing';
+    else label = 'dormant';
+
+    return { rate: ratePerDay, vitality, label, total, week, day };
   }
 
   // ----------------------------------------------------------
@@ -3089,37 +3277,30 @@ svg#main-viz {
 
     layoutAgentTree();
 
-    // System health heartbeat ring — pulsing radar emanating from center
+    // System heartbeat — single expanding ring, speed reflects health
     const hbCx = state._treeCx || state.width / 2;
     const hbCy = state._treeCy || state.height / 2;
-    const hbSpeed = state.health === 'green' ? 0.02 : state.health === 'yellow' ? 0.04 : 0.07;
+    const hbSpeed = state.health === 'green' ? 0.015 : state.health === 'yellow' ? 0.03 : 0.06;
     const hbPhase = (state.time * hbSpeed) % 1;
-    const hbMaxR = Math.min(state.width, state.height) * 0.25;
-    const hbColor = state.health === 'green' ? '52,211,153' : state.health === 'yellow' ? '234,179,8' : '239,68,68';
+    const hbMaxR = Math.min(state.width, state.height) * 0.3;
+    const phaseNeb = PHASE_NEBULA[state.agentPhase || 'read'] || PHASE_NEBULA.read;
+    // Heartbeat color: phase-colored when healthy, shifts toward warning colors when degraded
+    const hbColor = state.health === 'green' ? `${phaseNeb.r},${phaseNeb.g},${phaseNeb.b}`
+      : state.health === 'yellow' ? '234,179,8' : '239,68,68';
 
     let hbRing = agentTreeLayer.select('.health-heartbeat');
     if (hbRing.empty()) {
       hbRing = agentTreeLayer.append('circle').attr('class', 'health-heartbeat')
-        .attr('fill', 'none').attr('stroke-width', 1);
+        .attr('fill', 'none');
     }
     hbRing
       .attr('cx', hbCx).attr('cy', hbCy)
       .attr('r', 40 + hbPhase * hbMaxR)
-      .attr('stroke', `rgba(${hbColor},${0.15 * (1 - hbPhase)})`)
-      .attr('stroke-width', 1.5 * (1 - hbPhase));
+      .attr('stroke', `rgba(${hbColor},${0.08 * (1 - hbPhase)})`)
+      .attr('stroke-width', 1 * (1 - hbPhase));
 
-    // Second ring offset for depth
-    let hbRing2 = agentTreeLayer.select('.health-heartbeat-2');
-    if (hbRing2.empty()) {
-      hbRing2 = agentTreeLayer.append('circle').attr('class', 'health-heartbeat-2')
-        .attr('fill', 'none');
-    }
-    const hbPhase2 = ((state.time * hbSpeed) + 0.5) % 1;
-    hbRing2
-      .attr('cx', hbCx).attr('cy', hbCy)
-      .attr('r', 40 + hbPhase2 * hbMaxR)
-      .attr('stroke', `rgba(${hbColor},${0.08 * (1 - hbPhase2)})`)
-      .attr('stroke-width', 1 * (1 - hbPhase2));
+    // Remove stale second ring if it exists
+    agentTreeLayer.select('.health-heartbeat-2').remove();
 
     // Build link data with curve control points
     const linkData = agents.filter(a => a.parent && state.agents.has(a.parent)).map(a => {
@@ -3163,18 +3344,6 @@ svg#main-viz {
     updateDataParticles(linkData);
     const dpData = state.dataParticles;
     const dps = agentTreeLayer.selectAll('.agent-data-particle').data(dpData, d => d.id);
-    // Particle glow halos (larger, dimmer circle behind each particle)
-    const dpGlows = agentTreeLayer.selectAll('.agent-particle-glow').data(dpData, d => d.id + '-glow');
-    dpGlows.enter().append('circle').attr('class', 'agent-particle-glow').attr('r', 8)
-      .merge(dpGlows)
-      .attr('cx', d => bezierPoint(d.source.x, d.source.y, d.cpx, d.cpy, d.target.x, d.target.y, d.t).x)
-      .attr('cy', d => bezierPoint(d.source.x, d.source.y, d.cpx, d.cpy, d.target.x, d.target.y, d.t).y)
-      .attr('fill', d => {
-        const ck = AGENT_COLORS[agents.indexOf(d.target) % AGENT_COLORS.length];
-        return PALETTE[ck] ? PALETTE[ck].glow + '0.15)' : 'rgba(74,158,255,0.15)';
-      });
-    dpGlows.exit().remove();
-
     dps.enter().append('circle').attr('class', 'agent-data-particle').attr('r', 3)
       .merge(dps)
       .attr('cx', d => bezierPoint(d.source.x, d.source.y, d.cpx, d.cpy, d.target.x, d.target.y, d.t).x)
@@ -3253,12 +3422,12 @@ svg#main-viz {
       .attr('opacity', 1)
       .text(d => d.label.length > 12 ? d.label.split(' ').map(w => w[0]).join('') : d.label);
 
-    // Full name below the circle — hidden for minimal look
+    // Full name below circle — reveals on zoom
     merged.select('.agent-node-action')
       .attr('y', d => d.nodeRadius + 16)
       .attr('fill', 'var(--text-secondary)')
       .attr('font-size', 11)
-      .attr('opacity', 0)
+      .attr('opacity', state.zoom > 1.2 ? 0.7 : 0)
       .attr('text-anchor', 'middle')
       .text(d => d.label);
 
@@ -3270,19 +3439,21 @@ svg#main-viz {
     };
     const badgeLen = d => Math.min(30, (badgeText(d) || '').length);
 
-    // Tool badge — hidden for minimal look (details on hover)
+    // Tool badge — reveals on zoom (semantic zoom: detail increases with zoom)
+    const showTools = state.zoom > 1.8;
     merged.select('.agent-tool-bg')
-      .attr('opacity', 0)
+      .attr('opacity', showTools ? 0.8 : 0)
       .attr('x', d => -(Math.min(90, badgeLen(d) * 3.5 + 8)))
       .attr('y', d => d.nodeRadius + 26)
       .attr('width', d => Math.min(180, badgeLen(d) * 7 + 16))
       .attr('height', 16)
       .attr('rx', 4)
-      .attr('fill', 'none')
-      .attr('stroke', 'none');
+      .attr('fill', d => showTools && badgeText(d) ? 'rgba(34,211,238,0.08)' : 'none')
+      .attr('stroke', d => showTools && badgeText(d) ? 'rgba(34,211,238,0.2)' : 'none')
+      .attr('stroke-width', 0.5);
 
     merged.select('.agent-node-tool-badge')
-      .attr('opacity', 0)
+      .attr('opacity', showTools ? 0.8 : 0)
       .attr('y', d => d.nodeRadius + 38)
       .attr('fill', 'var(--accent-cyan)')
       .attr('font-size', 10)
@@ -3293,9 +3464,9 @@ svg#main-viz {
 
     nodeGroups.exit().transition().duration(500).attr('opacity', 0).remove();
 
-    // Goal tendrils — connect leaf agents to their goal colonies
+    // Goal tendrils — connect agents to their goal colonies with visible energy flow
     const goalTendrilData = agents
-      .filter(a => a.goalId && state.colonies.has(a.goalId) && !agents.some(c => c.parent === a.id))
+      .filter(a => a.goalId && state.colonies.has(a.goalId))
       .map(a => {
         const colony = state.colonies.get(a.goalId);
         return {
@@ -3306,23 +3477,46 @@ svg#main-viz {
         };
       });
 
+    // Glow halo behind goal tendrils
+    const goalGlows = agentTreeLayer.selectAll('.goal-tendril-glow').data(goalTendrilData, d => d.id + '-glow');
+    goalGlows.enter().append('path').attr('class', 'goal-tendril-glow')
+      .attr('fill', 'none')
+      .merge(goalGlows)
+      .attr('d', d => {
+        const ax = d.agent.x, ay = d.agent.y;
+        const gx = d.colony.cx, gy = d.colony.cy;
+        const mx = (ax + gx) / 2, my = (ay + gy) / 2;
+        const tcx = state._treeCx, tcy = state._treeCy;
+        const cpx = mx - (tcx - mx) * 0.3;
+        const cpy = my - (tcy - my) * 0.3;
+        return `M${ax},${ay} Q${cpx},${cpy} ${gx},${gy}`;
+      })
+      .attr('stroke', d => PALETTE[d.colorKey] ? PALETTE[d.colorKey].glow + '0.06)' : 'rgba(255,255,255,0.03)')
+      .attr('stroke-width', 6);
+    goalGlows.exit().remove();
+
+    // Visible tendril paths with animated dash flow
     const goalTendrils = agentTreeLayer.selectAll('.goal-tendril').data(goalTendrilData, d => d.id);
     goalTendrils.enter().append('path').attr('class', 'goal-tendril')
+      .attr('fill', 'none')
       .merge(goalTendrils)
       .attr('d', d => {
         const ax = d.agent.x, ay = d.agent.y;
         const gx = d.colony.cx, gy = d.colony.cy;
         const mx = (ax + gx) / 2, my = (ay + gy) / 2;
-        const cx = state._treeCx, cy = state._treeCy;
-        // Control point pulled away from center for outward arc
-        const cpx = mx - (cx - mx) * 0.3;
-        const cpy = my - (cy - my) * 0.3;
+        const tcx = state._treeCx, tcy = state._treeCy;
+        const cpx = mx - (tcx - mx) * 0.3;
+        const cpy = my - (tcy - my) * 0.3;
         return `M${ax},${ay} Q${cpx},${cpy} ${gx},${gy}`;
       })
-      .attr('stroke', d => PALETTE[d.colorKey] ? PALETTE[d.colorKey].glow + '0.15)' : 'rgba(255,255,255,0.08)')
-      .attr('stroke-width', 1)
-      .attr('stroke-dasharray', '4,6')
-      .attr('fill', 'none');
+      .attr('stroke', d => {
+        const active = d.agent.status === 'active';
+        const pal = PALETTE[d.colorKey];
+        return pal ? pal.glow + (active ? '0.35)' : '0.18)') : 'rgba(255,255,255,0.12)';
+      })
+      .attr('stroke-width', d => d.agent.status === 'active' ? 1.8 : 1)
+      .attr('stroke-dasharray', '8,12')
+      .attr('stroke-dashoffset', -state.time * 0.5);
     goalTendrils.exit().remove();
   }
 
@@ -4559,6 +4753,7 @@ Auth: tokens refreshed, no anomalies`;
     render();
     renderAgentTree();
     renderSynapseTree();
+    renderDocuments();
   }
 
   // ----------------------------------------------------------

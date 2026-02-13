@@ -517,6 +517,30 @@ svg#main-viz {
   opacity: 1;
 }
 
+#hud-growth {
+  display: flex; align-items: center; gap: 4px;
+}
+
+#hud-sparkline {
+  opacity: 0.7;
+}
+
+.hud-growth-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 0.3s, opacity 0.3s;
+}
+
+#hud-bar:hover .hud-growth-label {
+  max-width: 80px;
+  opacity: 1;
+}
+
 #hud-task {
   display: flex; align-items: center; gap: 8px;
   overflow: hidden;
@@ -1499,6 +1523,10 @@ svg#main-viz {
     </div>
     <span class="context-label" id="ctx-label">0K / 200K</span>
   </div>
+  <div id="hud-growth">
+    <svg id="hud-sparkline" width="40" height="16" viewBox="0 0 40 16"></svg>
+    <span id="hud-growth-label" class="hud-growth-label"></span>
+  </div>
   <div id="hud-task">
     <span class="hud-goal-badge" id="hud-goal-badge">Agent</span>
     <span class="hud-task-name" id="hud-task-name">Waiting for status...</span>
@@ -1854,6 +1882,12 @@ svg#main-viz {
     const growth = computeGrowthVitality();
     const vitalityBoost = 0.5 + growth.vitality * 1.5; // 0.5 (dormant) to 2.0 (surging)
 
+    // Stagnation desaturation: when growth stalls, nebula shifts toward grey
+    const saturation = 0.3 + growth.vitality * 0.7; // 0.3 (dormant) to 1.0 (surging)
+    const nr = Math.round(nebula.r * saturation + 140 * (1 - saturation));
+    const ng = Math.round(nebula.g * saturation + 140 * (1 - saturation));
+    const nb = Math.round(nebula.b * saturation + 150 * (1 - saturation));
+
     // Phase-aware nebula glow at center (where agents live)
     const cx = w / 2, cy = h / 2;
     const nebulaRadius = Math.min(w, h) * 0.5;
@@ -1861,8 +1895,8 @@ svg#main-viz {
     const nebulaAlpha = nebulaPulse * mood.nebulaIntensity * vitalityBoost;
 
     const grad = bgCtx.createRadialGradient(cx, cy, 0, cx, cy, nebulaRadius);
-    grad.addColorStop(0, `rgba(${nebula.r},${nebula.g},${nebula.b},${nebulaAlpha * 1.5})`);
-    grad.addColorStop(0.4, `rgba(${nebula.r},${nebula.g},${nebula.b},${nebulaAlpha * 0.5})`);
+    grad.addColorStop(0, `rgba(${nr},${ng},${nb},${nebulaAlpha * 1.5})`);
+    grad.addColorStop(0.4, `rgba(${nr},${ng},${nb},${nebulaAlpha * 0.5})`);
     grad.addColorStop(1, 'transparent');
     bgCtx.fillStyle = grad;
     bgCtx.fillRect(0, 0, w, h);
@@ -1872,15 +1906,16 @@ svg#main-viz {
     const nx2 = cx + Math.sin(drift) * nebulaRadius * 0.3;
     const ny2 = cy + Math.cos(drift * 0.7) * nebulaRadius * 0.2;
     const grad2 = bgCtx.createRadialGradient(nx2, ny2, 0, nx2, ny2, nebulaRadius * 0.6);
-    grad2.addColorStop(0, `rgba(${nebula.r},${nebula.g},${nebula.b},${nebulaAlpha * 0.4})`);
+    grad2.addColorStop(0, `rgba(${nr},${ng},${nb},${nebulaAlpha * 0.4})`);
     grad2.addColorStop(1, 'transparent');
     bgCtx.fillStyle = grad2;
     bgCtx.fillRect(0, 0, w, h);
 
-    // Stars — brightness modulated by health mood
+    // Stars — brightness modulated by health mood and growth vitality
+    const starVitality = 0.6 + growth.vitality * 0.4; // dimmer stars when stagnant
     for (const star of bgStars) {
       const flicker = Math.sin(t * star.speed * mood.pulseSpeed + star.phase) * 0.15 + star.alpha;
-      const brightness = Math.max(0.02, flicker * mood.starBright);
+      const brightness = Math.max(0.02, flicker * mood.starBright * starVitality);
       bgCtx.beginPath();
       bgCtx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
       bgCtx.fillStyle = `rgba(200,200,240,${brightness})`;
@@ -2593,6 +2628,21 @@ svg#main-viz {
     colonyHalos.enter()
       .append('circle')
       .attr('class', 'colony-halo')
+      .style('cursor', 'pointer')
+      .on('mouseenter', function(event, d) {
+        const tooltip = document.getElementById('tooltip');
+        tooltip.querySelector('.tt-message').textContent = d.goal.name || d.id;
+        const progress = d.goal.progress ? d.goal.progress + '% progress' : '';
+        const commits = d.particles.length + ' commits';
+        const status = d.active ? 'ACTIVE' : 'idle';
+        tooltip.querySelector('.tt-meta').textContent = [status, progress, commits].filter(Boolean).join(' \u2022 ');
+        tooltip.style.left = event.clientX + 12 + 'px';
+        tooltip.style.top = event.clientY - 10 + 'px';
+        tooltip.classList.add('visible');
+      })
+      .on('mouseleave', function() {
+        document.getElementById('tooltip').classList.remove('visible');
+      })
       .merge(colonyHalos)
       .attr('cx', d => d.cx)
       .attr('cy', d => d.cy)
@@ -3360,6 +3410,7 @@ svg#main-viz {
 
     const entering = nodeGroups.enter().append('g').attr('class', 'agent-node-g')
       .style('cursor', 'pointer')
+      .each(d => { d._enterTime = state.time; })
       .on('mouseenter', function(event, d) { showAgentDetail(d, event); })
       .on('mouseleave', function() { hideAgentDetail(); });
     entering.append('circle').attr('class', 'agent-node-bg');
@@ -3370,7 +3421,16 @@ svg#main-viz {
     entering.append('text').attr('class', 'agent-node-tool-badge');
 
     const merged = entering.merge(nodeGroups);
-    merged.attr('transform', d => `translate(${d.x},${d.y})`);
+    merged.each(function(d) {
+      // Smooth entrance: scale up over 30 frames
+      const age = state.time - (d._enterTime || 0);
+      const entranceProg = Math.min(1, age / 30);
+      const eased = 1 - Math.pow(1 - entranceProg, 3); // ease-out cubic
+      const scale = 0.3 + 0.7 * eased;
+      d3.select(this)
+        .attr('transform', `translate(${d.x},${d.y}) scale(${scale})`)
+        .attr('opacity', eased);
+    });
 
     // Node size breathes when active (encodes activity through motion)
     const breatheScale = 1 + Math.sin(state.time * 0.04) * 0.06;
@@ -4626,6 +4686,35 @@ Auth: tokens refreshed, no anomalies`;
     document.getElementById('hud-status-text').textContent = state.statusText;
   }
 
+  function updateGrowthSparkline() {
+    const growth = computeGrowthVitality();
+    const svg = document.getElementById('hud-sparkline');
+    const label = document.getElementById('hud-growth-label');
+    if (!svg || !label) return;
+
+    // Build daily histogram for last 14 days
+    const days = new Array(14).fill(0);
+    for (const s of state.synapses) {
+      const d = Math.floor(s.age);
+      if (d >= 0 && d < 14) days[13 - d]++; // newest on right
+    }
+    const maxVal = Math.max(1, ...days);
+
+    // Draw sparkline as a polyline
+    const points = days.map((v, i) => {
+      const x = (i / 13) * 38 + 1;
+      const y = 15 - (v / maxVal) * 13;
+      return `${x},${y}`;
+    }).join(' ');
+
+    // Color based on vitality
+    const color = growth.vitality > 0.5 ? '#34d399' : growth.vitality > 0.2 ? '#f59e0b' : '#606080';
+    svg.innerHTML = `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+
+    label.textContent = growth.label;
+    label.style.color = color;
+  }
+
   function modeLabel(mode) {
     switch(mode) {
       case 'active': return 'Active';
@@ -4754,6 +4843,9 @@ Auth: tokens refreshed, no anomalies`;
     renderAgentTree();
     renderSynapseTree();
     renderDocuments();
+
+    // Update sparkline every ~60 frames (~1 second)
+    if (state.time % 60 === 0) updateGrowthSparkline();
   }
 
   // ----------------------------------------------------------

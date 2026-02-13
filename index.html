@@ -2459,22 +2459,23 @@ svg#main-viz {
       });
     echoRings.exit().remove();
 
-    // Synapse labels at high zoom — show commit message
-    if (state.zoom > 2.5) {
-      const sLabels = synapseTreeLayer.selectAll('.synapse-label').data(nodes, d => d.hash);
+    // Synapse labels at high zoom — show commit message (limit to 15 most recent)
+    if (state.zoom > 3) {
+      const recentNodes = nodes.slice().sort((a, b) => a.age - b.age).slice(0, 15);
+      const sLabels = synapseTreeLayer.selectAll('.synapse-label').data(recentNodes, d => d.hash);
       sLabels.enter().append('text').attr('class', 'synapse-label')
         .attr('font-family', 'var(--font-mono)')
-        .attr('font-size', 8)
+        .attr('font-size', 7)
         .attr('pointer-events', 'none')
         .merge(sLabels)
         .attr('x', d => d.x + 8).attr('y', d => d.y + 3)
         .attr('fill', d => {
           const c = SYNAPSE_COLORS[d.type] || SYNAPSE_COLORS.other;
-          return c.glow + '0.6)';
+          return c.glow + '0.5)';
         })
         .text(d => {
           const msg = d.message || '';
-          return msg.length > 30 ? msg.slice(0, 28) + '..' : msg;
+          return msg.length > 25 ? msg.slice(0, 23) + '..' : msg;
         });
       sLabels.exit().remove();
     } else {
@@ -2871,9 +2872,10 @@ svg#main-viz {
       .attr('stroke-width', 1.5)
       .attr('opacity', state.zoom > 1.5 ? 0.7 : 0);
 
-    // Commit message labels at deep zoom (semantic zoom)
-    if (state.zoom > 2.5) {
-      let pLabels = particlesLayer.selectAll('.particle-label').data(allParticles.slice(0, 40), d => d.id);
+    // Commit message labels at deep zoom — limit to 20 most recent
+    if (state.zoom > 3) {
+      const recentParticles = allParticles.slice().sort((a, b) => a.age - b.age).slice(0, 20);
+      let pLabels = particlesLayer.selectAll('.particle-label').data(recentParticles, d => d.id);
       pLabels.enter().append('text').attr('class', 'particle-label')
         .attr('font-size', 8)
         .attr('font-family', 'var(--font-mono)')
@@ -3808,7 +3810,7 @@ svg#main-viz {
       .attr('y', d => d.nodeRadius + 16)
       .attr('fill', 'var(--text-secondary)')
       .attr('font-size', 11)
-      .attr('opacity', state.zoom > 1.2 ? 0.7 : 0)
+      .attr('opacity', state.zoom > 1.5 ? 0.6 : 0)
       .attr('text-anchor', 'middle')
       .text(d => d.label);
 
@@ -3820,8 +3822,8 @@ svg#main-viz {
     };
     const badgeLen = d => Math.min(30, (badgeText(d) || '').length);
 
-    // Tool badge — reveals on zoom (semantic zoom: detail increases with zoom)
-    const showTools = state.zoom > 1.8;
+    // Tool badge — only at deep zoom, replaces the full-name label
+    const showTools = state.zoom > 2.5;
     merged.select('.agent-tool-bg')
       .attr('opacity', showTools ? 0.8 : 0)
       .attr('x', d => -(Math.min(90, badgeLen(d) * 3.5 + 8)))

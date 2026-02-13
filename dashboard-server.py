@@ -42,7 +42,6 @@ WATCHED_FILES = {
     os.path.join(PROJECT_DIR, ".planning", "OPPORTUNITIES.md"): "opportunities",
     os.path.join(PROJECT_DIR, ".planning", "METRICS.md"):       "metrics",
     os.path.join(PROJECT_DIR, ".planning", "LOG.md"):           "log",
-    os.path.join(PROJECT_DIR, ".planning", "STRATEGY.md"):      "strategy",
     os.path.join(PROJECT_DIR, ".planning", "GOALS.md"):         "goals_full",
     os.path.join(PROJECT_DIR, ".planning", "ASSETS.md"):        "assets_full",
 }
@@ -289,7 +288,7 @@ def get_document_metadata() -> dict[str, dict]:
     """Stat all planning files and return metadata."""
     planning_dir = os.path.join(PROJECT_DIR, ".planning")
     files_to_check = [
-        "GOALS.md", "ASSETS.md", "STATE.md", "STRATEGY.md",
+        "GOALS.md", "ASSETS.md", "STATE.md",
         "OPPORTUNITIES.md", "METRICS.md", "LOG.md",
     ]
     docs = {}
@@ -340,8 +339,6 @@ def get_full_document_map() -> dict:
          "input", "Available resources"),
         ("STATE", os.path.join(planning_dir, "STATE.md"),
          "state", "System state & progress"),
-        ("STRATEGY", os.path.join(planning_dir, "STRATEGY.md"),
-         "state", "Current strategy document"),
         ("METRICS", os.path.join(planning_dir, "METRICS.md"),
          "state", "Performance metrics"),
         ("LOG", os.path.join(planning_dir, "LOG.md"),
@@ -666,6 +663,65 @@ def _aggregate_daily_tokens():
     }
 
 
+def _extract_task_descriptions(jsonl_path):
+    """Extract Task tool call descriptions from a session JSONL.
+
+    Returns dict mapping subagent short IDs to their task descriptions.
+    Scans for Task tool_use blocks and their results to match agent IDs.
+    """
+    descriptions = {}
+    pending_tasks = {}  # tool_use_id → description
+
+    try:
+        with open(jsonl_path, "r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                # Quick filter: only parse lines that might contain Task calls or agent IDs
+                if '"Task"' not in line and '"agent-' not in line and '"agentId"' not in line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                if entry.get("type") == "assistant":
+                    for block in entry.get("message", {}).get("content", []):
+                        if isinstance(block, dict) and block.get("type") == "tool_use" and block.get("name") == "Task":
+                            inp = block.get("input", {})
+                            desc = inp.get("description", "")
+                            sa_type = inp.get("subagent_type", "")
+                            tool_id = block.get("id", "")
+                            label = desc or sa_type or "Subagent"
+                            if tool_id:
+                                pending_tasks[tool_id] = label
+
+                elif entry.get("type") == "result":
+                    # Results reference their tool_use_id and may contain the agent ID
+                    tool_id = entry.get("tool_use_id", "")
+                    if tool_id in pending_tasks:
+                        # Look for agentId in the result content
+                        content = entry.get("content", "")
+                        if isinstance(content, list):
+                            content = " ".join(
+                                b.get("text", "") if isinstance(b, dict) else str(b)
+                                for b in content
+                            )
+                        if isinstance(content, str):
+                            # Match patterns like "agentId: a11c662" or "agent-a11c662"
+                            for pattern in [r"agentId:\s*([a-f0-9]+)", r"agent-([a-f0-9]+)"]:
+                                m = re.search(pattern, content)
+                                if m:
+                                    agent_short = m.group(1)
+                                    descriptions[agent_short] = pending_tasks[tool_id]
+                                    break
+    except OSError:
+        pass
+
+    return descriptions
+
+
 def scan_sessions():
     """Find all active Claude Code sessions on this machine."""
     now = time.time()
@@ -714,6 +770,9 @@ def scan_sessions():
                 # Check for active subagents
                 sa_dir = os.path.join(project_path, session_id, "subagents")
                 if os.path.isdir(sa_dir):
+                    # Extract task descriptions from parent session
+                    task_descs = _extract_task_descriptions(jsonl_path)
+
                     for sa_file in glob.glob(os.path.join(sa_dir, "agent-*.jsonl")):
                         try:
                             sa_mtime = os.path.getmtime(sa_file)
@@ -723,15 +782,27 @@ def scan_sessions():
                             continue
 
                         sa_name = os.path.splitext(os.path.basename(sa_file))[0]
-                        sa_state = _parse_session_tail(_tail_read(sa_file, 8192))
+                        sa_short_id = sa_name.replace("agent-", "")
+                        sa_state = _parse_session_tail(_tail_read(sa_file, 32768))
+
+                        # Build label: task description > current tool > agent type > short ID
+                        sa_label = (
+                            task_descs.get(sa_short_id)
+                            or sa_state["currentTool"]
+                            or sa_short_id
+                        )
+
+                        idle_secs_sa = now - sa_mtime
+                        sa_status = "active" if idle_secs_sa < 60 else "idle"
 
                         agents.append({
                             "id": sa_name,
-                            "label": sa_state["currentTool"] or sa_name.replace("agent-", ""),
+                            "label": sa_label,
                             "parent": session_id,
-                            "status": "active",
+                            "status": sa_status,
                             "currentTool": sa_state["currentTool"],
                             "currentAction": sa_state["currentAction"] or "Working...",
+                            "recentTools": sa_state.get("recentTools", []),
                             "reasoning": sa_state["reasoning"],
                             "goalId": None,
                             "tokens": sa_state["tokens"],

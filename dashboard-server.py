@@ -948,12 +948,27 @@ def _extract_doc_activity(agents):
     return activities
 
 
+def _read_wrapper_heartbeat() -> dict:
+    """Read the wrapper heartbeat file to determine if the wrapper process is alive."""
+    hb_path = os.path.join(STATUS_DIR, "heartbeat")
+    try:
+        with open(hb_path) as f:
+            ts = f.read().strip()
+        mtime = os.path.getmtime(hb_path)
+        age = time.time() - mtime
+        return {"alive": True, "last": ts, "age": age}
+    except (OSError, ValueError):
+        return {"alive": False, "last": None, "age": 9999}
+
+
 def session_poller():
     """Continuously scan for active sessions and broadcast updates."""
     prev_ids = set()
     prev_activities = set()
     usage_tick = 0
+    heartbeat_tick = 0
     USAGE_EVERY = 10  # aggregate daily tokens every 10 polls (~30s)
+    HEARTBEAT_EVERY = 10  # broadcast heartbeat every ~30s even without sessions
     while True:
         agents = scan_sessions()
         cur_ids = {a["id"] for a in agents}
@@ -963,12 +978,33 @@ def session_poller():
                 "agents": agents, "phase": "execute",
             }))
             n = len([a for a in agents if a["parent"] is None])
+            wrapper_hb = _read_wrapper_heartbeat()
             broadcaster.broadcast("heartbeat", json.dumps({
                 "alive": True,
                 "last": datetime.now(timezone.utc).isoformat(),
                 "activeSessions": n,
+                "wrapperAlive": wrapper_hb["alive"],
+                "wrapperAge": wrapper_hb["age"],
             }))
             prev_ids = cur_ids
+            heartbeat_tick = 0
+
+        # Even with no sessions, periodically broadcast heartbeat so client
+        # knows the dashboard server (and wrapper) are alive
+        heartbeat_tick += 1
+        if heartbeat_tick >= HEARTBEAT_EVERY and not agents:
+            heartbeat_tick = 0
+            wrapper_hb = _read_wrapper_heartbeat()
+            broadcaster.broadcast("agent_tree", json.dumps({
+                "agents": [], "phase": "standby",
+            }))
+            broadcaster.broadcast("heartbeat", json.dumps({
+                "alive": wrapper_hb["alive"],
+                "last": datetime.now(timezone.utc).isoformat(),
+                "activeSessions": 0,
+                "wrapperAlive": wrapper_hb["alive"],
+                "wrapperAge": wrapper_hb["age"],
+            }))
 
         # Broadcast document activity for architecture view live flow
         if agents:

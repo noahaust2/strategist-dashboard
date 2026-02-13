@@ -5033,10 +5033,16 @@ svg#main-viz {
       eventSource.addEventListener('heartbeat', (e) => {
         try {
           const data = JSON.parse(e.data);
-          state.lastHeartbeat = data.timestamp || new Date().toISOString();
+          state.lastHeartbeat = data.last || data.timestamp || new Date().toISOString();
+          state._wrapperAlive = data.wrapperAlive !== undefined ? data.wrapperAlive : true;
+          state._wrapperAge = data.wrapperAge || 0;
           const hbEl = document.getElementById('heartbeat-display');
           if (hbEl) hbEl.textContent = 'Last heartbeat: ' + formatTime(state.lastHeartbeat);
-          addFeedEntry('heartbeat', 'Heartbeat received');
+          // Only show as feed entry occasionally to avoid spam
+          if (!state._lastHbFeed || Date.now() - state._lastHbFeed > 60000) {
+            addFeedEntry('heartbeat', 'Heartbeat received');
+            state._lastHbFeed = Date.now();
+          }
         } catch(err) {}
       });
 
@@ -5149,11 +5155,17 @@ svg#main-viz {
             });
             renderAgentTree();
             updateAgentCards();
-            // Update HUD status based on session count
+            // Update HUD status based on session count and phase
             const sessionCount = data.agents.filter(a => !a.parent).length;
             if (sessionCount === 0) {
-              state.statusText = 'No active sessions';
-              state.health = 'yellow';
+              if (data.phase === 'standby') {
+                // No sessions but wrapper is alive — system is between cycles
+                state.statusText = 'Standby — awaiting trigger';
+                state.health = 'green';
+              } else {
+                state.statusText = 'No active sessions';
+                state.health = 'yellow';
+              }
             } else {
               state.statusText = sessionCount + ' session' + (sessionCount !== 1 ? 's' : '') + ' active';
               state.health = 'green';
@@ -5358,7 +5370,9 @@ svg#main-viz {
       case 'git_activity': handleGitActivity(data); break;
       case 'daydream': handleDaydream(data); break;
       case 'heartbeat':
-        state.lastHeartbeat = data.timestamp || new Date().toISOString();
+        state.lastHeartbeat = data.last || data.timestamp || new Date().toISOString();
+        state._wrapperAlive = data.wrapperAlive !== undefined ? data.wrapperAlive : true;
+        state._wrapperAge = data.wrapperAge || 0;
         const hbDisplay = document.getElementById('heartbeat-display');
         if (hbDisplay) hbDisplay.textContent = 'Last heartbeat: ' + formatTime(state.lastHeartbeat);
         addFeedEntry('heartbeat', 'Heartbeat received');
@@ -6160,14 +6174,16 @@ Auth: tokens refreshed, no anomalies`;
     if (state.lastHeartbeat) {
       const elapsed = (Date.now() - new Date(state.lastHeartbeat).getTime()) / 1000;
       if (elapsed > 300) {
+        // Dashboard server hasn't sent a heartbeat in 5+ min — something is wrong
         state.health = 'red';
-        state.statusText = 'No heartbeat - agent may be down';
+        state.statusText = 'No heartbeat — dashboard server may be down';
         updateHealthUI();
       } else if (elapsed > 120) {
         state.health = 'yellow';
         state.statusText = 'Heartbeat delayed';
         updateHealthUI();
       }
+      // Note: wrapper alive + no sessions = standby (handled in agent_tree handler)
     }
   }, 10000);
 

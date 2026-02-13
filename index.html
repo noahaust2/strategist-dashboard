@@ -1610,7 +1610,7 @@ svg#main-viz {
     <span class="legend-item" title="Closer to goal = more tokens invested">Distance = investment</span>
     <span class="legend-item" title="Bigger nodes have used more tokens">Size = workload</span>
     <span class="legend-item" title="Faster particles = higher token throughput">Speed = throughput</span>
-    <span class="legend-item" title="Wider glow halo = more reasoning steps before acting">Glow = thought depth</span>
+    <span class="legend-item" title="Violet dots orbiting inside node = reasoning steps">Inner dots = reasoning</span>
     <span class="legend-item" title="Diamond pulse = system has been self-modifying (rules, skills, strategy)">&#9670; pulse = evolution</span>
   </div>
 </div>
@@ -3894,21 +3894,14 @@ svg#main-viz {
                          : 1;
     const breatheScale = 1 + Math.sin(state.time * 0.04 * modeBreatheMul) * 0.06;
 
-    // Reasoning depth: more reasoning steps = dramatically larger, brighter glow halo
     merged.select('.agent-node-bg')
       .attr('r', d => {
-        const reasons = (d.reasoning || []).length;
-        const depthBoost = Math.min(30, reasons * 6); // up to 30px extra radius
-        const base = d.nodeRadius + 6 + depthBoost;
-        return d.status === 'active' ? base * breatheScale : base * 0.85;
+        const base = d.nodeRadius + 8;
+        return d.status === 'active' ? base * breatheScale : base * 0.9;
       })
       .attr('fill', d => {
-        const reasons = (d.reasoning || []).length;
-        const depthGlow = Math.min(0.14, reasons * 0.028);
-        const intensity = d.status === 'active' ? 0.04 + depthGlow : 0.02;
-        // Tint toward violet when reasoning is deep
-        const violet = Math.min(40, reasons * 8);
-        return `rgba(${200 - violet},${210 - violet},${230 + Math.min(20, violet / 2)},${intensity})`;
+        const intensity = d.status === 'active' ? 0.08 : 0.02;
+        return `rgba(200,210,230,${intensity})`;
       })
       .attr('filter', d => d.status === 'active' ? 'url(#glow-blue)' : 'none');
 

@@ -2268,6 +2268,7 @@ svg#main-viz {
     height: window.innerHeight,
     sidebarOpen: false,
     activePanel: 'process',
+    activeCommitHash: null,
     metrics: { revenue: '$0', views: 0, tasksPerWeek: 0, skills: 0, daydreamHitRate: 0 },
     time: 0,
     mouse: { x: -1000, y: -1000 },
@@ -3499,12 +3500,14 @@ svg#main-viz {
 
       if (wasActive) {
         state.sidebarOpen = false;
+        state.activeCommitHash = null;
         document.getElementById('sidebar').classList.remove('open');
       } else {
         tab.classList.add('active');
         document.getElementById(`panel-${panel}`).classList.add('active');
         state.sidebarOpen = true;
         state.activePanel = panel;
+        if (panel !== 'commit') state.activeCommitHash = null;
         document.getElementById('sidebar').classList.add('open');
       }
     });
@@ -3526,8 +3529,22 @@ svg#main-viz {
   // Commit Detail
   // ----------------------------------------------------------
   function showCommitDetail(commit) {
+    const hash = commit.hash || '';
+
+    // If commit panel is already open with this commit, close it (toggle)
+    if (state.sidebarOpen && state.activePanel === 'commit' && state.activeCommitHash === hash) {
+      document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('active'));
+      state.sidebarOpen = false;
+      state.activePanel = null;
+      state.activeCommitHash = null;
+      document.getElementById('sidebar').classList.remove('open');
+      return;
+    }
+
     // Open sidebar to commit panel
     openSidebarPanel('commit');
+    state.activeCommitHash = hash;
 
     const emptyEl = document.getElementById('commit-detail-empty');
     const contentEl = document.getElementById('commit-detail-content');
@@ -3539,7 +3556,6 @@ svg#main-viz {
     loadingEl.style.display = 'block';
 
     // Fill basic info immediately from local data
-    const hash = commit.hash || '';
     document.getElementById('commit-detail-hash').textContent = hash;
     document.getElementById('commit-detail-subject').textContent = commit.message || commit.subject || '';
 
@@ -7426,6 +7442,7 @@ Auth: tokens refreshed, no anomalies`;
         document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('active'));
         state.sidebarOpen = false;
         state.activePanel = null;
+        state.activeCommitHash = null;
         document.getElementById('sidebar').classList.remove('open');
         // Reset commit detail to empty state
         const commitEmpty = document.getElementById('commit-detail-empty');

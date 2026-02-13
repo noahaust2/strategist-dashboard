@@ -3871,6 +3871,7 @@ svg#main-viz {
     });
 
     // Force simulation: dual magnetic pull (goal + parent/child connections)
+    const now = Date.now();
     agents.forEach(a => {
       let fx = 0, fy = 0;
 

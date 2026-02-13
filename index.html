@@ -203,14 +203,28 @@ svg#main-viz {
 .arch-flow-glow {
   pointer-events: none;
 }
-/* Active-doc indicator ring animation */
+/* Active-doc pulsing ring — breathes in/out */
 @keyframes archActiveRing {
-  0%, 100% { stroke-opacity: 0.7; stroke-width: 3; }
-  50% { stroke-opacity: 0.3; stroke-width: 2; }
+  0%, 100% { stroke-opacity: 0.9; stroke-width: 4; }
+  50% { stroke-opacity: 0.35; stroke-width: 2.5; }
 }
 .arch-active-ring {
-  animation: archActiveRing 2s ease-in-out infinite;
+  animation: archActiveRing 1.5s ease-in-out infinite;
   pointer-events: none;
+}
+/* Active-doc outer glow — soft halo */
+@keyframes archActiveGlow {
+  0%, 100% { stroke-opacity: 0.25; }
+  50% { stroke-opacity: 0.08; }
+}
+.arch-active-glow {
+  animation: archActiveGlow 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+/* Active node — stroke brightens via class (size pulsed in JS) */
+.arch-node.arch-doc-active .arch-node-ring {
+  stroke-opacity: 1 !important;
+  stroke-width: 2.5 !important;
 }
 
 /* Architecture hover card */
@@ -6878,14 +6892,33 @@ Auth: tokens refreshed, no anomalies`;
     const container = svg.select('.arch-container');
     if (container.empty()) return;
 
-    // Remove old active rings
-    container.selectAll('.arch-active-ring').remove();
+    // Remove old rings and glows
+    container.selectAll('.arch-active-ring, .arch-active-glow').remove();
+    // Clear active class from all nodes
+    archNodeGs.classed('arch-doc-active', false);
+    // Reset fill color on all node rings
+    archNodeGs.select('.arch-node-ring')
+      .attr('fill', d => (ARCH_COLORS[d.category] || ARCH_COLORS.state).fill);
 
     archFlowActive.forEach((val, docId) => {
       const node = archNodes?.find(n => n.id === docId);
       if (!node) return;
 
       const color = val.type === 'write' ? '#f59e0b' : '#34d399';
+      const colorFaint = val.type === 'write' ? 'rgba(245,158,11,0.12)' : 'rgba(52,211,153,0.12)';
+
+      // Outer glow — large soft halo
+      container.append('circle')
+        .attr('class', 'arch-active-glow')
+        .attr('cx', node.x)
+        .attr('cy', node.y)
+        .attr('r', node.r + 20)
+        .attr('fill', 'none')
+        .attr('stroke', color)
+        .attr('stroke-width', 10)
+        .attr('data-doc-id', docId);
+
+      // Inner pulsing ring
       container.append('circle')
         .attr('class', 'arch-active-ring')
         .attr('cx', node.x)
@@ -6894,6 +6927,14 @@ Auth: tokens refreshed, no anomalies`;
         .attr('fill', 'none')
         .attr('stroke', color)
         .attr('data-doc-id', docId);
+
+      // Add active class to the node group (triggers CSS scale animation)
+      const nodeG = archNodeGs.filter(d => d.id === docId);
+      nodeG.classed('arch-doc-active', true);
+
+      // Tint the node fill color
+      nodeG.select('.arch-node-ring')
+        .attr('fill', colorFaint);
     });
   }
 
@@ -6965,11 +7006,35 @@ Auth: tokens refreshed, no anomalies`;
     // Render particles
     renderFlowParticles();
 
+    // Pulse active node sizes (breathe effect via JS)
+    if (archNodeGs) {
+      const t = now / 1000; // seconds
+      archFlowActive.forEach((val, docId) => {
+        const nodeG = archNodeGs.filter(d => d.id === docId);
+        if (nodeG.empty()) return;
+        const node = archNodes?.find(n => n.id === docId);
+        if (!node) return;
+        // Sine wave: pulses between 1.0x and 1.18x over 1.5s
+        const pulse = 1 + 0.18 * (0.5 + 0.5 * Math.sin(t * Math.PI * 2 / 1.5));
+        const r = node.r * pulse;
+        nodeG.select('.arch-node-ring').attr('r', r);
+        // Scale clip path and token fill too
+        nodeG.select('clipPath circle').attr('r', r);
+      });
+    }
+
     // Update active rings if activities changed
     if (archFlowActive.size === 0) {
-      // Clean up rings and stop loop
+      // Clean up rings, glows, active classes, and stop loop
       const svg = d3.select('#arch-graph');
-      svg.selectAll('.arch-active-ring').remove();
+      svg.selectAll('.arch-active-ring, .arch-active-glow').remove();
+      if (archNodeGs) {
+        archNodeGs.classed('arch-doc-active', false);
+        archNodeGs.select('.arch-node-ring')
+          .attr('r', d => d.r)
+          .attr('fill', d => (ARCH_COLORS[d.category] || ARCH_COLORS.state).fill);
+        archNodeGs.select('clipPath circle').attr('r', d => d.r);
+      }
       archFlowAnimFrame = null;
       // Clear remaining particles
       if (archFlowLayer) archFlowLayer.selectAll('*').remove();

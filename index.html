@@ -798,6 +798,11 @@ svg#main-viz {
   width: fit-content;
 }
 
+#agent-detail-goal {
+  font-size: 11px;
+  color: var(--accent-amber);
+}
+
 #agent-detail-tool {
   font-size: 12px;
   font-family: var(--font-mono);
@@ -808,6 +813,12 @@ svg#main-viz {
   font-size: 12px;
   color: var(--text-secondary);
   line-height: 1.4;
+}
+
+#agent-detail-model {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
 }
 
 #agent-detail-tokens {
@@ -1588,8 +1599,10 @@ svg#main-viz {
 <div id="agent-detail">
   <div id="agent-detail-name"></div>
   <div id="agent-detail-status"></div>
-  <div id="agent-detail-tool"></div>
+  <div id="agent-detail-goal"></div>
   <div id="agent-detail-action"></div>
+  <div id="agent-detail-tool"></div>
+  <div id="agent-detail-model"></div>
   <div id="agent-detail-tokens"></div>
 </div>
 
@@ -2669,6 +2682,57 @@ svg#main-viz {
 
     colonyHalos.exit().remove();
 
+    // Goal progress arcs — thin arc around colony showing completion %
+    const progressData = colonyData.filter(d => d.goal.progress > 0);
+    const progressArcs = coloniesLayer.selectAll('.colony-progress-arc').data(progressData, d => d.id);
+
+    progressArcs.enter()
+      .append('path')
+      .attr('class', 'colony-progress-arc')
+      .attr('fill', 'none')
+      .merge(progressArcs)
+      .attr('d', d => {
+        const r = d.radius + 24;
+        const pct = Math.min(1, (d.goal.progress || 0) / 100);
+        const endAngle = -Math.PI / 2 + pct * Math.PI * 2;
+        const startAngle = -Math.PI / 2;
+        const x1 = d.cx + Math.cos(startAngle) * r;
+        const y1 = d.cy + Math.sin(startAngle) * r;
+        const x2 = d.cx + Math.cos(endAngle) * r;
+        const y2 = d.cy + Math.sin(endAngle) * r;
+        const large = pct > 0.5 ? 1 : 0;
+        return pct >= 1
+          ? `M${x1},${y1} A${r},${r} 0 1,1 ${x1 - 0.01},${y1}`
+          : `M${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2}`;
+      })
+      .attr('stroke', d => d.color.base)
+      .attr('stroke-width', 2)
+      .attr('stroke-opacity', d => d.active ? 0.5 : 0.25)
+      .attr('stroke-linecap', 'round');
+
+    progressArcs.exit().remove();
+
+    // Stalled goal indicators — dashed amber ring when no recent commits
+    const stalledData = colonyData.filter(d => {
+      if (d.particles.length === 0) return false;
+      const recentCount = d.particles.filter(p => p.age < 7).length;
+      return recentCount === 0; // no commits in 7 days = stalled
+    });
+    const stalledRings = coloniesLayer.selectAll('.colony-stalled').data(stalledData, d => d.id);
+    stalledRings.enter()
+      .append('circle')
+      .attr('class', 'colony-stalled')
+      .attr('fill', 'none')
+      .merge(stalledRings)
+      .attr('cx', d => d.cx)
+      .attr('cy', d => d.cy)
+      .attr('r', d => d.radius + 28)
+      .attr('stroke', 'rgba(234,179,8,0.2)')
+      .attr('stroke-width', 1)
+      .attr('stroke-dasharray', '3,5')
+      .attr('stroke-dashoffset', state.time * 0.2);
+    stalledRings.exit().remove();
+
     // Colony labels — goal name + commit count
     const labelData = state.zoom > 0.3 ? colonyData : [];
     const labels = coloniesLayer.selectAll('.colony-label').data(labelData, d => d.id);
@@ -2754,6 +2818,25 @@ svg#main-viz {
       .attr('stroke-width', 1.5)
       .attr('opacity', state.zoom > 1.5 ? 0.7 : 0);
 
+    // Commit message labels at deep zoom (semantic zoom)
+    if (state.zoom > 2.5) {
+      let pLabels = particlesLayer.selectAll('.particle-label').data(allParticles.slice(0, 40), d => d.id);
+      pLabels.enter().append('text').attr('class', 'particle-label')
+        .attr('font-size', 8)
+        .attr('font-family', 'var(--font-mono)')
+        .attr('fill', 'rgba(255,255,255,0.4)')
+        .merge(pLabels)
+        .attr('x', d => d.x + d.radius + 4)
+        .attr('y', d => d.y + 3)
+        .text(d => {
+          const msg = d.commit.message || '';
+          return msg.length > 35 ? msg.slice(0, 33) + '..' : msg;
+        });
+      pLabels.exit().remove();
+    } else {
+      particlesLayer.selectAll('.particle-label').remove();
+    }
+
     pGroups.exit()
       .transition().duration(500)
       .attr('opacity', 0)
@@ -2767,6 +2850,22 @@ svg#main-viz {
       .append('path')
       .attr('class', 'daydream-link')
       .attr('fill', 'none')
+      .style('cursor', 'pointer')
+      .on('mouseenter', function(event, d) {
+        const tooltip = document.getElementById('tooltip');
+        const label = d.hit ? 'Daydream Hit' : d.opportunity ? 'Daydream Opportunity' : 'Daydream Link';
+        tooltip.querySelector('.tt-message').textContent = label;
+        tooltip.querySelector('.tt-meta').textContent = 'Cross-goal connection between colonies';
+        tooltip.querySelector('.tt-stat.add').textContent = '';
+        tooltip.querySelector('.tt-stat.del').textContent = '';
+        tooltip.querySelector('.tt-stat.files').textContent = '';
+        tooltip.style.left = event.clientX + 12 + 'px';
+        tooltip.style.top = event.clientY - 10 + 'px';
+        tooltip.classList.add('visible');
+      })
+      .on('mouseleave', function() {
+        document.getElementById('tooltip').classList.remove('visible');
+      })
       .merge(links)
       .attr('d', d => {
         const mx = (d.source.x + d.target.x) / 2;
@@ -2866,6 +2965,18 @@ svg#main-viz {
       }
     });
   });
+
+  function openSidebarPanel(panelName) {
+    document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('active'));
+    const tab = document.querySelector(`.sidebar-tab[data-panel="${panelName}"]`);
+    if (tab) tab.classList.add('active');
+    const panel = document.getElementById(`panel-${panelName}`);
+    if (panel) panel.classList.add('active');
+    state.sidebarOpen = true;
+    state.activePanel = panelName;
+    document.getElementById('sidebar').classList.add('open');
+  }
 
   // ----------------------------------------------------------
   // Sidebar Rendering
@@ -3691,8 +3802,21 @@ svg#main-viz {
     statusEl.style.color = statusColors[agent.status] || statusColors.idle;
     statusEl.style.background = statusBgs[agent.status] || statusBgs.idle;
 
-    document.getElementById('agent-detail-tool').textContent = agent.currentTool ? agent.currentTool + '()' : 'No active tool';
+    // Goal assignment
+    const goalEl = document.getElementById('agent-detail-goal');
+    if (agent.goalId && state.colonies.has(agent.goalId)) {
+      const colony = state.colonies.get(agent.goalId);
+      goalEl.textContent = 'Working on: ' + (colony.goal.name || agent.goalId);
+    } else {
+      goalEl.textContent = '';
+    }
+
     document.getElementById('agent-detail-action').textContent = agent.currentAction || 'Idle';
+    document.getElementById('agent-detail-tool').textContent = agent.currentTool ? agent.currentTool + '()' : 'No active tool';
+
+    // Model info
+    const modelEl = document.getElementById('agent-detail-model');
+    modelEl.textContent = agent.model ? agent.model.replace('claude-', '').replace('-20251001', '').replace('-20250929', '') : '';
 
     const tok = agent.tokens;
     document.getElementById('agent-detail-tokens').textContent = tok
@@ -4758,6 +4882,36 @@ Auth: tokens refreshed, no anomalies`;
     const dot = document.getElementById('hud-health-dot');
     dot.className = 'hud-dot' + (state.health === 'green' ? '' : ' ' + state.health);
     document.getElementById('hud-status-text').textContent = state.statusText;
+
+    // Collect active warnings for health tooltip
+    const warnings = [];
+    if (state.health === 'red') warnings.push('System unhealthy — check heartbeat');
+    if (state.health === 'yellow') warnings.push('System degraded');
+    if (state.agentMode === 'rate_limited') warnings.push('Rate limited — reduced capacity');
+    if (state.agentMode === 'stagnating') warnings.push('Stagnation detected — no progress');
+    if (state.agentMode === 'rest') warnings.push('In rest window');
+
+    const growth = computeGrowthVitality();
+    if (growth.label === 'dormant') warnings.push('Growth dormant — no recent learning');
+    if (growth.label === 'slowing') warnings.push('Growth slowing');
+
+    const total = (state.context.system || 0) + (state.context.conversation || 0) +
+                  (state.context.tools || 0) + (state.context.thinking || 0);
+    const ctxPct = total / (state.context.max || 200000);
+    if (ctxPct > 0.8) warnings.push('Context window ' + Math.round(ctxPct * 100) + '% full');
+
+    // Check for stalled goals
+    state.colonies.forEach(c => {
+      const recent = c.particles.filter(p => p.age < 7).length;
+      if (c.particles.length > 0 && recent === 0) {
+        warnings.push((c.goal.name || c.id) + ' — stalled (no commits in 7d)');
+      }
+    });
+
+    const healthEl = document.getElementById('hud-health');
+    healthEl.title = warnings.length > 0
+      ? 'Warnings:\n' + warnings.join('\n')
+      : 'System healthy — all systems nominal';
   }
 
   function updateGrowthSparkline() {

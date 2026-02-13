@@ -2028,98 +2028,104 @@ svg#main-viz {
   // Self-modification types — only these become synapse nodes
   const SELF_MOD_TYPES = new Set(['rules', 'review', 'identity', 'skill', 'strategy', 'research', 'metrics']);
 
+  // Find the best host agent for a synapse type
+  function getSynapseHost(type) {
+    const agents = Array.from(state.agents.values());
+    if (agents.length === 0) return null;
+    const root = agents.find(a => !a.parent);
+
+    // Keywords to match synapse types to agent roles
+    const typeKeywords = {
+      research: ['research', 'scout', 'explore'],
+      skill:    ['code', 'engineer', 'build', 'tool'],
+      metrics:  ['data', 'analyst', 'metric', 'monitor'],
+    };
+
+    const keywords = typeKeywords[type];
+    if (keywords) {
+      const match = agents.find(a =>
+        keywords.some(k => a.id.toLowerCase().includes(k) || (a.label || '').toLowerCase().includes(k))
+      );
+      if (match) return match;
+    }
+
+    // rules, strategy, review, identity → root agent
+    return root || agents[0];
+  }
+
   function initSynapseTree(synapseData) {
     if (!synapseData || synapseData.length === 0) return;
 
-    const cx = state._treeCx || state.width / 2;
-    const cy = state._treeCy || state.height / 2;
-
-    // Only self-modification events, most recent 100, oldest first
     const events = synapseData
       .filter(s => SELF_MOD_TYPES.has(s.type))
       .slice(0, 100).reverse();
 
     if (events.length === 0) return;
 
-    // Place nodes in an outer ring (280-420px from center) so they don't overlap agent tree
-    const nodes = events.map((s, i) => {
-      const typeAngle = SYNAPSE_TYPE_ANGLES[s.type] || 0;
-      const jitter = (Math.random() - 0.5) * 0.6;
-      const dist = 280 + Math.random() * 140;
-      return {
-        hash: s.hash,
-        date: s.date,
-        message: s.message,
-        type: s.type || 'other',
-        index: i,
-        x: cx + Math.cos(typeAngle + jitter) * dist,
-        y: cy + Math.sin(typeAngle + jitter) * dist,
-        age: s.date ? (Date.now() - new Date(s.date).getTime()) / 86400000 : 30,
-      };
+    // Group by type to compute branch chain positions
+    const typeGroups = {};
+    events.forEach(s => {
+      if (!typeGroups[s.type]) typeGroups[s.type] = [];
+      typeGroups[s.type].push(s);
     });
 
-    // Chain nodes of same type chronologically
-    const links = [];
-    const typeGroups = {};
-    nodes.forEach((n, i) => {
-      if (!typeGroups[n.type]) typeGroups[n.type] = [];
-      const group = typeGroups[n.type];
-      if (group.length > 0) {
-        links.push({ source: group[group.length - 1], target: i });
-      }
-      group.push(i);
+    const nodes = [];
+    Object.entries(typeGroups).forEach(([type, group]) => {
+      const typeAngle = SYNAPSE_TYPE_ANGLES[type] || 0;
+      group.forEach((s, j) => {
+        // Branch offset from host: grows outward with organic jitter
+        const baseDist = 22 + j * 14;
+        const hashSeed = (s.hash || 'x').charCodeAt(0) + ((s.hash || 'xx').charCodeAt(1) || 0) * 0.3;
+        const jitter = Math.sin(j * 1.7 + hashSeed * 0.05) * 0.3;
+        const curve = Math.sin(j * 0.4 + hashSeed * 0.02) * 0.2;
+
+        nodes.push({
+          hash: s.hash,
+          date: s.date,
+          message: s.message,
+          type: s.type || 'other',
+          index: nodes.length,
+          _branchAngle: typeAngle,
+          _branchJitter: jitter + curve,
+          _branchDist: baseDist,
+          _branchOrder: j,
+          x: 0, y: 0,
+          age: s.date ? (Date.now() - new Date(s.date).getTime()) / 86400000 : 30,
+          isNew: false,
+        });
+      });
     });
 
     state.synapses = nodes;
-
-    // D3 force simulation — settle in outer ring, repel from center
-    if (state.synapseSim) state.synapseSim.stop();
-    state.synapseSim = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink(links).distance(18).strength(0.15))
-      .force('charge', d3.forceManyBody().strength(-15).distanceMax(200))
-      .force('ring', d3.forceRadial(340, cx, cy).strength(0.05))
-      .alpha(0.4)
-      .alphaDecay(0.015)
-      .on('tick', () => {});
+    if (state.synapseSim) { state.synapseSim.stop(); state.synapseSim = null; }
   }
 
   function addSynapse(synapse) {
-    if (!SELF_MOD_TYPES.has(synapse.type)) return; // Only self-mod events
+    if (!SELF_MOD_TYPES.has(synapse.type)) return;
 
-    const cx = state._treeCx || state.width / 2;
-    const cy = state._treeCy || state.height / 2;
     const typeAngle = SYNAPSE_TYPE_ANGLES[synapse.type] || 0;
-
-    // Find nearest existing node of same type to branch from
-    let parent = null;
-    let minDist = Infinity;
-    state.synapses.forEach(n => {
-      if (n.type === synapse.type) {
-        const dx = n.x - cx, dy = n.y - cy;
-        const d = Math.sqrt(dx * dx + dy * dy);
-        if (d < minDist) { minDist = d; parent = n; }
-      }
-    });
-
-    const startX = parent ? parent.x : cx + Math.cos(typeAngle) * 300;
-    const startY = parent ? parent.y : cy + Math.sin(typeAngle) * 300;
-    const dist = 20 + Math.random() * 30;
+    const sameType = state.synapses.filter(n => n.type === synapse.type);
+    const j = sameType.length;
+    const baseDist = 22 + j * 14;
+    const hashSeed = (synapse.hash || 'x').charCodeAt(0);
+    const jitter = Math.sin(j * 1.7 + hashSeed * 0.05) * 0.3;
+    const curve = Math.sin(j * 0.4 + hashSeed * 0.02) * 0.2;
 
     const node = {
-      ...synapse,
+      hash: synapse.hash,
+      date: synapse.date,
+      message: synapse.message,
+      type: synapse.type || 'other',
       index: state.synapses.length,
-      x: startX + Math.cos(typeAngle) * dist,
-      y: startY + Math.sin(typeAngle) * dist,
+      _branchAngle: typeAngle,
+      _branchJitter: jitter + curve,
+      _branchDist: baseDist,
+      _branchOrder: j,
+      x: 0, y: 0,
       age: 0,
       isNew: true,
     };
     state.synapses.push(node);
-
-    if (state.synapseSim) {
-      state.synapseSim.nodes(state.synapses);
-      state.synapseSim.alpha(0.15).restart();
-    }
-
     setTimeout(() => { node.isNew = false; }, 2000);
   }
 
@@ -2130,34 +2136,100 @@ svg#main-viz {
       return;
     }
 
-    // Build dendrite links — chain by type
-    const dendrites = [];
+    const cx = state._treeCx || state.width / 2;
+    const cy = state._treeCy || state.height / 2;
+
+    // Compute absolute positions from host agent positions each frame
     const typeChains = {};
-    nodes.forEach((n, i) => {
-      if (!typeChains[n.type]) typeChains[n.type] = [];
-      const chain = typeChains[n.type];
-      if (chain.length > 0) {
-        const srcIdx = chain[chain.length - 1];
-        dendrites.push({ source: nodes[srcIdx], target: n, id: `syn-${srcIdx}-${i}` });
+    const dendrites = [];
+
+    nodes.forEach(n => {
+      const host = getSynapseHost(n.type);
+      const hx = host ? host.x : cx;
+      const hy = host ? host.y : cy;
+      const hr = host ? (host.nodeRadius || 20) : 20;
+
+      // Direction: outward from canvas center through host agent
+      const isCenter = !host || (Math.abs(hx - cx) < 5 && Math.abs(hy - cy) < 5);
+      let angle;
+      if (isCenter) {
+        // Root agent at center — fan branches by type angle
+        angle = n._branchAngle + n._branchJitter;
+      } else {
+        // Off-center agent — grow outward, slight type spread
+        const outAngle = Math.atan2(hy - cy, hx - cx);
+        const typeSpread = ((n._branchAngle / (2 * Math.PI)) - 0.5) * Math.PI * 0.5;
+        angle = outAngle + typeSpread + n._branchJitter;
       }
-      chain.push(i);
+
+      const dist = hr + n._branchDist;
+
+      // Subtle organic breathing
+      const bx = Math.sin(state.time * 0.008 + n.index * 0.5) * 1.2;
+      const by = Math.cos(state.time * 0.006 + n.index * 0.7) * 1.2;
+
+      n.x = hx + Math.cos(angle) * dist + bx;
+      n.y = hy + Math.sin(angle) * dist + by;
+      n._hostX = hx;
+      n._hostY = hy;
+      n._hostRadius = hr;
+
+      // Build type chains for dendrites
+      if (!typeChains[n.type]) typeChains[n.type] = [];
+      typeChains[n.type].push(n);
     });
 
-    // Breathing opacity
-    const breathe = 0.2 + Math.sin(state.time * 0.015) * 0.08;
+    // Build dendrites: host edge → first node, then chain connections
+    Object.values(typeChains).forEach(chain => {
+      chain.forEach((n, j) => {
+        if (j === 0) {
+          // Root dendrite from host agent edge
+          const dx = n.x - n._hostX, dy = n.y - n._hostY;
+          const d = Math.sqrt(dx * dx + dy * dy) || 1;
+          dendrites.push({
+            source: {
+              x: n._hostX + (dx / d) * n._hostRadius,
+              y: n._hostY + (dy / d) * n._hostRadius,
+            },
+            target: n,
+            id: `syn-host-${n.index}`,
+            isRoot: true,
+          });
+        } else {
+          dendrites.push({
+            source: chain[j - 1],
+            target: n,
+            id: `syn-${chain[j - 1].index}-${n.index}`,
+            isRoot: false,
+          });
+        }
+      });
+    });
 
-    // Render dendrites
+    const breathe = 0.25 + Math.sin(state.time * 0.015) * 0.1;
+
+    // Render dendrites (curved paths for organic coral feel)
     const dLinks = synapseTreeLayer.selectAll('.synapse-dendrite').data(dendrites, d => d.id);
-    dLinks.enter().append('line').attr('class', 'synapse-dendrite')
+    dLinks.enter().append('path').attr('class', 'synapse-dendrite')
+      .attr('fill', 'none')
       .merge(dLinks)
-      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
-      .attr('x2', d => d.target.x).attr('y2', d => d.target.y)
+      .attr('d', d => {
+        // Slight curve for organic branch look
+        const mx = (d.source.x + d.target.x) / 2;
+        const my = (d.source.y + d.target.y) / 2;
+        const perpX = -(d.target.y - d.source.y) * 0.15;
+        const perpY = (d.target.x - d.source.x) * 0.15;
+        return `M${d.source.x},${d.source.y} Q${mx + perpX},${my + perpY} ${d.target.x},${d.target.y}`;
+      })
       .attr('stroke', d => {
         const c = SYNAPSE_COLORS[d.target.type] || SYNAPSE_COLORS.other;
-        return c.glow + (breathe * 0.4) + ')';
+        return c.glow + (d.isRoot ? breathe * 0.4 : breathe * 0.6) + ')';
       })
-      .attr('stroke-width', d => d.target.isNew ? 1.8 : 0.6)
-      .attr('opacity', d => d.target.isNew ? 0.8 : breathe);
+      .attr('stroke-width', d => {
+        if (d.target.isNew) return 1.8;
+        return d.isRoot ? 1.2 : 0.7;
+      })
+      .attr('opacity', d => d.target.isNew ? 0.9 : breathe);
     dLinks.exit().remove();
 
     // Render synapse nodes
@@ -2182,20 +2254,8 @@ svg#main-viz {
       .attr('stroke-width', d => d.isNew ? 1.5 : 0);
     sNodes.exit().remove();
 
-    // Count label below center
-    const cx = state._treeCx || state.width / 2;
-    const cy = state._treeCy || state.height / 2;
-    let countLabel = synapseTreeLayer.select('.synapse-count-label');
-    if (countLabel.empty()) {
-      countLabel = synapseTreeLayer.append('text').attr('class', 'synapse-count-label')
-        .attr('font-family', 'var(--font-mono)')
-        .attr('font-size', 10)
-        .attr('fill', 'rgba(167,139,250,0.4)')
-        .attr('text-anchor', 'middle');
-    }
-    countLabel
-      .attr('x', cx).attr('y', cy + 60)
-      .text(nodes.length + ' learned');
+    // Remove old center label (synapses now integrated with agents)
+    synapseTreeLayer.selectAll('.synapse-count-label').remove();
   }
 
   // ----------------------------------------------------------
@@ -2842,8 +2902,26 @@ svg#main-viz {
     const cx = state.width / 2;
     const cy = state.height / 2;
 
+    // Ensure all agents have initial positions (prevents 0,0 flash)
+    agents.forEach(a => {
+      if (a.x === undefined || a.x === 0) a.x = cx;
+      if (a.y === undefined || a.y === 0) a.y = cy;
+    });
+
     const root = agents.find(a => !a.parent);
-    if (!root) return;
+    if (!root) {
+      // Fallback: no hierarchy — distribute agents in a circle around center
+      state._treeCx = cx;
+      state._treeCy = cy;
+      agents.forEach((a, i) => {
+        const angle = (2 * Math.PI * i) / agents.length - Math.PI / 2;
+        const radius = Math.min(state.width, state.height) * 0.15;
+        a.x = cx + Math.cos(angle) * radius;
+        a.y = cy + Math.sin(angle) * radius;
+        a.nodeRadius = a.nodeRadius || (i === 0 ? 40 : 28);
+      });
+      return;
+    }
 
     // Build d3 hierarchy from flat agent list
     function buildNode(agent) {
@@ -3548,7 +3626,13 @@ svg#main-viz {
           const data = JSON.parse(e.data);
           if (data.agents) {
             state.agents.clear();
-            data.agents.forEach(a => state.agents.set(a.id, a));
+            const cx = state.width / 2, cy = state.height / 2;
+            data.agents.forEach(a => {
+              // Ensure agents have valid positions (prevents 0,0 overlap)
+              if (!a.x || a.x === 0) a.x = cx;
+              if (!a.y || a.y === 0) a.y = cy;
+              state.agents.set(a.id, a);
+            });
             renderAgentTree();
             updateAgentCards();
             // Update HUD status based on session count
@@ -3990,70 +4074,70 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'Task', goalId: 'audience',
       currentAction: 'Coordinating content pipeline',
       tokens: { input: 45200, output: 12800, total: 58000 },
-      x: 0, y: 0, nodeRadius: 30,
+      nodeRadius: 30,
     });
     state.agents.set('content-writer', {
       id: 'content-writer', label: 'Content Writer', parent: 'strategist',
       status: 'active', currentTool: 'Write', goalId: 'audience',
       currentAction: 'Drafting blog post on AI applications',
       tokens: { input: 22000, output: 8500, total: 30500 },
-      x: 0, y: 0, nodeRadius: 22,
+      nodeRadius: 22,
     });
     state.agents.set('blog-drafter', {
       id: 'blog-drafter', label: 'Blog Drafter', parent: 'content-writer',
       status: 'active', currentTool: 'Write', goalId: 'audience',
       currentAction: 'Writing intro section',
       tokens: { input: 6000, output: 3200, total: 9200 },
-      x: 0, y: 0, nodeRadius: 16,
+      nodeRadius: 16,
     });
     state.agents.set('seo-optimizer', {
       id: 'seo-optimizer', label: 'SEO Optimizer', parent: 'content-writer',
       status: 'active', currentTool: 'Grep', goalId: 'audience',
       currentAction: 'Analyzing keyword density',
       tokens: { input: 4800, output: 1600, total: 6400 },
-      x: 0, y: 0, nodeRadius: 16,
+      nodeRadius: 16,
     });
     state.agents.set('research-scout', {
       id: 'research-scout', label: 'Research Scout', parent: 'strategist',
       status: 'active', currentTool: 'WebSearch', goalId: 'research',
       currentAction: 'Searching competitor strategies',
       tokens: { input: 15000, output: 4200, total: 19200 },
-      x: 0, y: 0, nodeRadius: 22,
+      nodeRadius: 22,
     });
     state.agents.set('deep-researcher', {
       id: 'deep-researcher', label: 'Deep Researcher', parent: 'research-scout',
       status: 'active', currentTool: 'Read', goalId: 'research',
       currentAction: 'Reading embedding analysis paper',
       tokens: { input: 8000, output: 2100, total: 10100 },
-      x: 0, y: 0, nodeRadius: 16,
+      nodeRadius: 16,
     });
     state.agents.set('trend-analyzer', {
       id: 'trend-analyzer', label: 'Trend Analyzer', parent: 'research-scout',
       status: 'active', currentTool: 'WebFetch', goalId: 'research',
       currentAction: 'Fetching trending topics API',
       tokens: { input: 5200, output: 1800, total: 7000 },
-      x: 0, y: 0, nodeRadius: 16,
+      nodeRadius: 16,
     });
     state.agents.set('code-engineer', {
       id: 'code-engineer', label: 'Code Engineer', parent: 'strategist',
       status: 'active', currentTool: 'Edit', goalId: 'infrastructure',
       currentAction: 'Implementing RSS parser',
       tokens: { input: 18000, output: 9200, total: 27200 },
-      x: 0, y: 0, nodeRadius: 22,
+      nodeRadius: 22,
     });
     state.agents.set('test-runner', {
       id: 'test-runner', label: 'Test Runner', parent: 'code-engineer',
       status: 'active', currentTool: 'Bash', goalId: 'infrastructure',
       currentAction: 'Running integration tests',
       tokens: { input: 3200, output: 800, total: 4000 },
-      x: 0, y: 0, nodeRadius: 16,
+      nodeRadius: 16,
     });
     state.agents.set('data-analyst', {
       id: 'data-analyst', label: 'Data Analyst', parent: 'strategist',
       status: 'active', currentTool: 'Read', goalId: 'revenue',
       currentAction: 'Analyzing engagement metrics',
       tokens: { input: 11000, output: 3400, total: 14400 },
-      x: 0, y: 0, nodeRadius: 22,
+      nodeRadius: 22,
     });
 
     // Seed context usage
@@ -4328,8 +4412,8 @@ Auth: tokens refreshed, no anomalies`;
     drawBg(timestamp * 0.001);
     updatePhysics();
     render();
-    renderSynapseTree();
     renderAgentTree();
+    renderSynapseTree();
   }
 
   // ----------------------------------------------------------

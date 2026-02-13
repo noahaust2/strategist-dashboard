@@ -7420,6 +7420,22 @@ Auth: tokens refreshed, no anomalies`;
       const missionStatus = document.getElementById('mission-status');
       const activityFeed = document.getElementById('activity-feed');
 
+      // Close sidebar when switching views (commit details are view-specific)
+      if (state.sidebarOpen) {
+        document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('active'));
+        state.sidebarOpen = false;
+        state.activePanel = null;
+        document.getElementById('sidebar').classList.remove('open');
+        // Reset commit detail to empty state
+        const commitEmpty = document.getElementById('commit-detail-empty');
+        const commitContent = document.getElementById('commit-detail-content');
+        const commitLoading = document.getElementById('commit-detail-loading');
+        if (commitEmpty) commitEmpty.style.display = '';
+        if (commitContent) commitContent.style.display = 'none';
+        if (commitLoading) commitLoading.style.display = 'none';
+      }
+
       if (view === 'arch') {
         canvasContainer.style.display = 'none';
         hudBar.style.display = 'none';

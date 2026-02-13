@@ -3877,82 +3877,9 @@ svg#main-viz {
 
     nodeGroups.exit().transition().duration(500).attr('opacity', 0).remove();
 
-    // Goal tendrils — connect to specific active/recent particle in the colony
-    const goalTendrilData = agents
-      .filter(a => a.goalId && state.colonies.has(a.goalId) && a.status === 'active')
-      .map(a => {
-        const colony = state.colonies.get(a.goalId);
-        // Target: the active particle, or the most recent one, or colony center
-        const activeP = colony.particles.find(p => p.isActive);
-        const recentP = colony.particles.length > 0
-          ? colony.particles.reduce((best, p) => p.age < best.age ? p : best)
-          : null;
-        const target = activeP || recentP;
-        return {
-          id: a.id + '-goal',
-          agent: a,
-          colony,
-          colorKey: colony.colorKey,
-          tx: target ? target.x : colony.cx,
-          ty: target ? target.y : colony.cy,
-        };
-      });
-
-    // Glow halo behind goal tendrils
-    const goalGlows = agentTreeLayer.selectAll('.goal-tendril-glow').data(goalTendrilData, d => d.id + '-glow');
-    goalGlows.enter().append('path').attr('class', 'goal-tendril-glow')
-      .attr('fill', 'none')
-      .merge(goalGlows)
-      .attr('d', d => {
-        const ax = d.agent.x, ay = d.agent.y;
-        const gx = d.tx, gy = d.ty;
-        const mx = (ax + gx) / 2, my = (ay + gy) / 2;
-        const tcx = state._treeCx, tcy = state._treeCy;
-        const cpx = mx - (tcx - mx) * 0.3;
-        const cpy = my - (tcy - my) * 0.3;
-        return `M${ax},${ay} Q${cpx},${cpy} ${gx},${gy}`;
-      })
-      .attr('stroke', d => PALETTE[d.colorKey] ? PALETTE[d.colorKey].glow + '0.06)' : 'rgba(255,255,255,0.03)')
-      .attr('stroke-width', 6);
-    goalGlows.exit().transition().duration(1000).attr('stroke-opacity', 0).remove();
-
-    // Visible tendril paths with animated dash flow
-    const goalTendrils = agentTreeLayer.selectAll('.goal-tendril').data(goalTendrilData, d => d.id);
-    goalTendrils.enter().append('path').attr('class', 'goal-tendril')
-      .attr('fill', 'none')
-      .style('cursor', 'pointer')
-      .on('mouseenter', function(event, d) {
-        const tooltip = document.getElementById('tooltip');
-        tooltip.querySelector('.tt-message').textContent = d.agent.label + ' → ' + (d.colony.goal.name || d.colony.id);
-        tooltip.querySelector('.tt-meta').textContent = 'Actively working on this goal';
-        tooltip.querySelector('.tt-stat.add').textContent = '';
-        tooltip.querySelector('.tt-stat.del').textContent = '';
-        tooltip.querySelector('.tt-stat.files').textContent = '';
-        tooltip.style.left = event.clientX + 12 + 'px';
-        tooltip.style.top = event.clientY - 10 + 'px';
-        tooltip.classList.add('visible');
-      })
-      .on('mouseleave', function() {
-        document.getElementById('tooltip').classList.remove('visible');
-      })
-      .merge(goalTendrils)
-      .attr('d', d => {
-        const ax = d.agent.x, ay = d.agent.y;
-        const gx = d.tx, gy = d.ty;
-        const mx = (ax + gx) / 2, my = (ay + gy) / 2;
-        const tcx = state._treeCx, tcy = state._treeCy;
-        const cpx = mx - (tcx - mx) * 0.3;
-        const cpy = my - (tcy - my) * 0.3;
-        return `M${ax},${ay} Q${cpx},${cpy} ${gx},${gy}`;
-      })
-      .attr('stroke', d => {
-        const pal = PALETTE[d.colorKey];
-        return pal ? pal.glow + '0.3)' : 'rgba(255,255,255,0.12)';
-      })
-      .attr('stroke-width', 1.5)
-      .attr('stroke-dasharray', '8,12')
-      .attr('stroke-dashoffset', -state.time * 0.5);
-    goalTendrils.exit().transition().duration(1000).attr('stroke-opacity', 0).remove();
+    // Clean up any leftover goal tendrils from previous version
+    agentTreeLayer.selectAll('.goal-tendril-glow').remove();
+    agentTreeLayer.selectAll('.goal-tendril').remove();
 
     // Current task label — subtle text below agent tree showing what's happening
     const taskText = state.activeTask ? state.activeTask.name || '' : '';

@@ -4174,16 +4174,16 @@ svg#main-viz {
 
   function updateDataParticles(linkData) {
     // Spawn new particles — rate and speed based on token throughput
-    if (state.time % 12 === 0) {
+    if (state.time % 8 === 0) {
       linkData.forEach(link => {
         if (link.target.status !== 'active') return;
-        // Throughput: tokens determine spawn chance and particle speed
         const tokens = link.target.tokens ? link.target.tokens.total : 0;
-        const throughput = Math.min(1, tokens / 60000); // 0-1 normalized
-        const spawnChance = 0.3 + throughput * 0.5; // 30-80% chance
+        const throughput = Math.min(1, tokens / 40000); // normalize against 40K
+        // Spawn rate: low-throughput agents rarely spawn, high-throughput flood
+        const spawnChance = 0.15 + throughput * 0.7; // 15-85%
         if (Math.random() > spawnChance) return;
-        // Speed: busier agents = faster particles (0.008 slow → 0.035 fast)
-        const speed = 0.008 + throughput * 0.027 + Math.random() * 0.004;
+        // Speed: 20x range — slow crawl (0.003) to fast zip (0.06)
+        const speed = 0.003 + throughput * throughput * 0.057 + Math.random() * 0.003;
         state.dataParticles.push({
           id: 'dp-' + Math.random().toString(36).slice(2),
           source: link.source,

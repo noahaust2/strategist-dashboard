@@ -112,14 +112,14 @@ svg#main-viz {
   position: fixed; inset: 0;
   z-index: 2;
   background: var(--bg-primary);
-  display: flex;
 }
 #arch-graph {
-  flex: 1;
   width: 100%; height: 100%;
 }
 #arch-doc-panel {
-  width: 480px;
+  position: fixed; top: 0; right: 0;
+  width: 480px; height: 100vh;
+  z-index: 10;
   background: var(--bg-secondary);
   border-left: 1px solid var(--border-subtle);
   display: flex; flex-direction: column;
@@ -171,20 +171,116 @@ svg#main-viz {
 /* Architecture graph node styles */
 .arch-node { cursor: pointer; }
 .arch-node:hover .arch-node-ring { stroke-opacity: 0.9 !important; }
+.arch-node.dimmed { opacity: 0.15; transition: opacity 0.3s; }
 .arch-link { fill: none; stroke-opacity: 0.25; }
+.arch-link.highlighted { stroke-opacity: 0.8; stroke-width: 2.5; }
 .arch-link-arrow { fill-opacity: 0.35; }
+.arch-link-label { display: none; }
+.arch-link-g:hover .arch-link-label { display: block; }
 @keyframes archPulse {
-  0% { r: attr(r); stroke-opacity: 0.8; }
+  0% { stroke-opacity: 0.8; }
   50% { stroke-opacity: 0.3; }
   100% { stroke-opacity: 0.8; }
 }
 .arch-node-pulse {
   animation: archPulse 1.5s ease-in-out;
 }
+@keyframes archRipple {
+  0% { r: 0; opacity: 0.6; }
+  100% { opacity: 0; }
+}
 .arch-delta-float {
   font-family: var(--font-mono);
   font-size: 11px;
   pointer-events: none;
+}
+
+/* Architecture hover card */
+#arch-hover-card {
+  position: fixed;
+  z-index: 500;
+  width: 280px;
+  background: rgba(10, 10, 15, 0.94);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-active);
+  border-radius: 10px;
+  padding: 14px 16px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  display: flex; flex-direction: column; gap: 6px;
+}
+#arch-hover-card.visible { opacity: 1; }
+.ahc-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.ahc-desc { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
+.ahc-stats {
+  display: flex; gap: 12px; font-size: 10px;
+  font-family: var(--font-mono); color: var(--text-muted);
+  border-top: 1px solid var(--border-subtle); padding-top: 6px;
+}
+.ahc-stat-val { color: var(--text-primary); }
+.ahc-connections {
+  font-size: 10px; color: var(--text-muted);
+  border-top: 1px solid var(--border-subtle); padding-top: 6px;
+  line-height: 1.5;
+}
+.ahc-conn-type { color: var(--accent-cyan); font-family: var(--font-mono); }
+.ahc-conn-target { color: var(--text-secondary); }
+
+/* Architecture health summary */
+#arch-health-summary {
+  position: fixed; top: 56px; right: 16px;
+  z-index: 5;
+  background: rgba(10, 10, 15, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: none;
+  font-size: 11px; font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+#arch-health-summary .ahs-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+}
+#arch-health-summary .ahs-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+}
+#arch-health-summary .ahs-count {
+  color: var(--text-primary); font-weight: 600; min-width: 16px; text-align: right;
+}
+#arch-health-summary .ahs-total {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 6px; margin-top: 4px;
+  color: var(--text-muted);
+}
+
+/* Architecture legend overlay */
+#arch-legend {
+  position: fixed; bottom: 20px; left: 20px;
+  z-index: 5;
+  background: rgba(10, 10, 15, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: none;
+  font-size: 10px; color: var(--text-muted);
+}
+#arch-legend .al-section { margin-bottom: 8px; }
+#arch-legend .al-section:last-child { margin-bottom: 0; }
+#arch-legend .al-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 2px 0; cursor: default;
+}
+#arch-legend .al-item:hover { color: var(--text-secondary); }
+#arch-legend .al-dot {
+  width: 8px; height: 8px; border-radius: 50; flex-shrink: 0;
+}
+#arch-legend .al-line {
+  width: 20px; height: 0; flex-shrink: 0;
+  border-top-width: 1.5px; border-top-style: solid;
 }
 
 /* Sidebar */
@@ -1743,6 +1839,19 @@ svg#main-viz {
     </div>
     <pre id="arch-doc-content">Click any document node to view its contents.</pre>
   </div>
+  <div id="arch-hover-card">
+    <div class="ahc-name"></div>
+    <div class="ahc-desc"></div>
+    <div class="ahc-stats"></div>
+    <div class="ahc-connections"></div>
+  </div>
+  <div id="arch-health-summary">
+    <div class="ahs-row"><span class="ahs-dot" style="background:var(--accent-green)"></span><span class="ahs-count" id="ahs-active">0</span> active <small>&lt;4h</small></div>
+    <div class="ahs-row"><span class="ahs-dot" style="background:var(--accent-amber)"></span><span class="ahs-count" id="ahs-recent">0</span> recent <small>&lt;48h</small></div>
+    <div class="ahs-row"><span class="ahs-dot" style="background:var(--text-muted)"></span><span class="ahs-count" id="ahs-stale">0</span> stale</div>
+    <div class="ahs-total"><span id="ahs-tokens">0</span> total tokens</div>
+  </div>
+  <div id="arch-legend"></div>
 </div>
 
 <div id="canvas-container">
@@ -6110,9 +6219,27 @@ Auth: tokens refreshed, no anomalies`;
     applies: '#eab308', delegates: '#22d3ee', informs: '#8b5cf6',
   };
 
-  let archData = null;  // cached from /api/documents
-  let archSim = null;   // D3 force simulation
+  // Layer assignments for hierarchical layout
+  const LAYER_MAP = {
+    'CLAUDE.md': 0,
+    'GOALS.md': 1, 'ASSETS.md': 1,
+    'goal-advancement.md': 2, 'reality-model-architecture.md': 2,
+    'review-gate.md': 2, 'approval-rules.md': 2, 'security.md': 2,
+    'task-lifecycle.md': 2, 'model-strategy.md': 2,
+    'usage-tracking.md': 2, 'self-correction.md': 2,
+    'STATE.md': 3, 'STRATEGY.md': 3, 'METRICS.md': 3,
+    'LOG.md': 3, 'OPPORTUNITIES.md': 3, 'FAILURE-CATALOG.md': 3,
+    'RESEARCH.md': 3,
+  };
+
+  let archData = null;
+  let archSim = null;
   let archInitialized = false;
+  let archNodeGs = null;
+  let archLinkGs = null;
+  let archNodes = null;
+  let archLinks = null;
+  let archNodeById = null;
 
   function initArchView() {
     if (archInitialized) return;
@@ -6131,51 +6258,87 @@ Auth: tokens refreshed, no anomalies`;
     }
   }
 
+  function getTimeAgo(mtime) {
+    if (!mtime) return 'unknown';
+    const diff = Date.now() - new Date(mtime).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 48) return hrs + 'h ago';
+    const days = Math.floor(hrs / 24);
+    return days + 'd ago';
+  }
+
+  function getFreshnessTier(mtime) {
+    if (!mtime) return 'stale';
+    const hrs = (Date.now() - new Date(mtime).getTime()) / 3600000;
+    if (hrs < 4) return 'active';
+    if (hrs < 48) return 'recent';
+    return 'stale';
+  }
+
+  function getFreshnessColor(tier) {
+    if (tier === 'active') return '#22c55e';
+    if (tier === 'recent') return '#f59e0b';
+    return null;
+  }
+
   function renderArchGraph() {
     if (!archData) return;
     const svg = d3.select('#arch-graph');
     svg.selectAll('*').remove();
 
-    const width = window.innerWidth - 20;
+    const width = window.innerWidth;
     const height = window.innerHeight;
     svg.attr('viewBox', `0 0 ${width} ${height}`);
 
     const docs = archData.documents;
     const rels = archData.relationships;
 
-    // Create node data with initial positions
-    const cx = width / 2 - 100, cy = height / 2;
-    const nodes = docs.map((d, i) => {
-      const angle = (i / docs.length) * Math.PI * 2 - Math.PI / 2;
-      const radius = d.category === 'hub' ? 0 : Math.min(width, height) * 0.28;
-      return {
-        ...d,
-        x: cx + Math.cos(angle) * radius,
-        y: cy + Math.sin(angle) * radius,
-        r: Math.max(18, Math.min(55, Math.sqrt(d.tokens / 50))),
-      };
+    // Build layers for hierarchical layout
+    const layers = [[], [], [], []];
+    const maxTokens = Math.max(...docs.map(n => n.tokens), 1);
+
+    archNodes = docs.map(d => {
+      const layer = LAYER_MAP[d.name] !== undefined ? LAYER_MAP[d.name] : (d.category === 'hub' ? 0 : d.category === 'input' ? 1 : d.category === 'rules' ? 2 : 3);
+      const r = Math.max(20, Math.min(55, Math.sqrt(d.tokens / 40)));
+      const node = { ...d, layer, r };
+      layers[layer].push(node);
+      return node;
     });
 
-    const nodeById = new Map(nodes.map(n => [n.id, n]));
+    // Compute fixed positions: evenly spaced x per layer, fixed y per layer
+    const padding = 80;
+    const topMargin = 80;
+    const layerHeight = (height - topMargin - padding) / 3;
+    layers.forEach((layerNodes, li) => {
+      const y = topMargin + li * layerHeight;
+      const count = layerNodes.length;
+      const spacing = (width - padding * 2) / Math.max(count, 1);
+      layerNodes.forEach((n, ni) => {
+        n.fx = padding + spacing * (ni + 0.5);
+        n.fy = y;
+        n.x = n.fx;
+        n.y = n.fy;
+      });
+    });
 
-    // Create link data — filter out links where source/target doesn't exist
-    const links = rels
-      .filter(r => nodeById.has(r[0]) && nodeById.has(r[1]))
-      .map(r => ({
-        source: r[0], target: r[1], type: r[2], label: r[3],
-      }));
+    archNodeById = new Map(archNodes.map(n => [n.id, n]));
 
-    // Zoom
+    archLinks = rels
+      .filter(r => archNodeById.has(r[0]) && archNodeById.has(r[1]))
+      .map(r => ({ source: r[0], target: r[1], type: r[2], label: r[3] }));
+
+    // Zoom (pan + zoom, no drag)
     const archZoom = d3.zoom()
       .scaleExtent([0.3, 5])
-      .on('zoom', (event) => {
-        container.attr('transform', event.transform);
-      });
+      .on('zoom', (event) => { container.attr('transform', event.transform); });
     svg.call(archZoom);
 
     const container = svg.append('g').attr('class', 'arch-container');
 
-    // Arrow markers for each link type
+    // Defs: arrow markers
     const defs = svg.append('defs');
     Object.entries(LINK_COLORS).forEach(([type, color]) => {
       defs.append('marker')
@@ -6190,66 +6353,77 @@ Auth: tokens refreshed, no anomalies`;
         .attr('class', 'arch-link-arrow');
     });
 
-    // Force simulation
-    archSim = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink(links).id(d => d.id).distance(d => {
-        const s = nodeById.get(typeof d.source === 'string' ? d.source : d.source.id);
-        const t = nodeById.get(typeof d.target === 'string' ? d.target : d.target.id);
-        return (s ? s.r : 30) + (t ? t.r : 30) + 80;
-      }).strength(0.4))
-      .force('charge', d3.forceManyBody().strength(-500))
-      .force('center', d3.forceCenter(cx, cy).strength(0.05))
-      .force('collide', d3.forceCollide(d => d.r + 15))
-      .force('x', d3.forceX(cx).strength(0.03))
-      .force('y', d3.forceY(cy).strength(0.03));
+    // Weak force sim for collision avoidance only (positions pinned via fx/fy)
+    archSim = d3.forceSimulation(archNodes)
+      .force('collide', d3.forceCollide(d => d.r + 12).strength(0.8))
+      .alphaDecay(0.05);
 
     // Links
-    const linkGs = container.selectAll('.arch-link-g')
-      .data(links).enter().append('g').attr('class', 'arch-link-g');
+    archLinkGs = container.selectAll('.arch-link-g')
+      .data(archLinks).enter().append('g').attr('class', 'arch-link-g');
 
-    const linkPaths = linkGs.append('path')
+    const linkPaths = archLinkGs.append('path')
       .attr('class', 'arch-link')
       .attr('stroke', d => LINK_COLORS[d.type] || '#666')
       .attr('stroke-width', 1.5)
+      .attr('stroke-dasharray', d => (d.type === 'reads' || d.type === 'informs') ? '4,3' : 'none')
       .attr('marker-end', d => 'url(#arrow-' + d.type + ')');
 
-    // Link labels (visible on hover/zoom)
-    const linkLabels = linkGs.append('text')
+    // Link hover areas (wider invisible path for easier hover)
+    archLinkGs.append('path')
+      .attr('class', 'arch-link-hover')
+      .attr('stroke', 'transparent')
+      .attr('stroke-width', 12)
+      .attr('fill', 'none')
+      .style('cursor', 'default');
+
+    // Link labels (hidden by default, shown on hover via CSS)
+    const linkLabels = archLinkGs.append('text')
       .attr('class', 'arch-link-label')
       .attr('text-anchor', 'middle')
       .attr('fill', d => LINK_COLORS[d.type] || '#666')
       .attr('font-size', 9)
-      .attr('opacity', 0.5)
+      .attr('opacity', 0.7)
       .text(d => d.label);
 
+    // Link hover → show tooltip
+    archLinkGs
+      .on('mouseenter', (event, d) => {
+        const srcName = archNodeById.get(typeof d.source === 'object' ? d.source.id : d.source)?.name || d.source;
+        const tgtName = archNodeById.get(typeof d.target === 'object' ? d.target.id : d.target)?.name || d.target;
+        showArchTooltip(event, `${srcName} → ${d.type} → ${tgtName}`, d.label);
+      })
+      .on('mouseleave', () => { hideArchTooltip(); });
+
     // Nodes
-    const nodeGs = container.selectAll('.arch-node')
-      .data(nodes).enter().append('g')
+    archNodeGs = container.selectAll('.arch-node')
+      .data(archNodes).enter().append('g')
       .attr('class', 'arch-node')
-      .call(d3.drag()
-        .on('start', (event, d) => {
-          if (!event.active) archSim.alphaTarget(0.3).restart();
-          d.fx = d.x; d.fy = d.y;
-        })
-        .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y; })
-        .on('end', (event, d) => {
-          if (!event.active) archSim.alphaTarget(0);
-          d.fx = null; d.fy = null;
-        })
-      )
-      .on('click', (event, d) => { openArchDoc(d); });
+      .on('click', (event, d) => { event.stopPropagation(); openArchDoc(d); });
+
+    // Freshness outer ring
+    archNodeGs.append('circle')
+      .attr('class', 'arch-freshness-ring')
+      .attr('r', d => d.r + 5)
+      .attr('fill', 'none')
+      .attr('stroke', d => getFreshnessColor(getFreshnessTier(d.mtime)) || 'transparent')
+      .attr('stroke-width', 2.5)
+      .attr('stroke-opacity', d => getFreshnessColor(getFreshnessTier(d.mtime)) ? 0.6 : 0);
 
     // Node background glow
-    nodeGs.append('circle')
+    archNodeGs.append('circle')
       .attr('class', 'arch-node-glow')
-      .attr('r', d => d.r + 6)
+      .attr('r', d => d.r + 8)
       .attr('fill', 'none')
       .attr('stroke', d => (ARCH_COLORS[d.category] || ARCH_COLORS.state).stroke)
-      .attr('stroke-width', 4)
-      .attr('stroke-opacity', 0.08);
+      .attr('stroke-width', 6)
+      .attr('stroke-opacity', d => {
+        const tier = getFreshnessTier(d.mtime);
+        return tier === 'active' ? 0.15 : tier === 'recent' ? 0.08 : 0.03;
+      });
 
     // Node circle
-    nodeGs.append('circle')
+    archNodeGs.append('circle')
       .attr('class', 'arch-node-ring')
       .attr('r', d => d.r)
       .attr('fill', d => (ARCH_COLORS[d.category] || ARCH_COLORS.state).fill)
@@ -6257,14 +6431,13 @@ Auth: tokens refreshed, no anomalies`;
       .attr('stroke-width', 1.5)
       .attr('stroke-opacity', 0.6);
 
-    // Token count bar (fills node from bottom proportional to token count)
-    const maxTokens = Math.max(...nodes.map(n => n.tokens));
-    nodeGs.append('clipPath')
+    // Token fill (liquid inside circle)
+    archNodeGs.append('clipPath')
       .attr('id', d => 'clip-' + d.id)
       .append('circle')
       .attr('r', d => d.r);
 
-    nodeGs.append('rect')
+    archNodeGs.append('rect')
       .attr('class', 'arch-token-fill')
       .attr('clip-path', d => 'url(#clip-' + d.id + ')')
       .attr('x', d => -d.r)
@@ -6272,99 +6445,226 @@ Auth: tokens refreshed, no anomalies`;
       .attr('y', d => d.r - (d.tokens / maxTokens) * d.r * 2)
       .attr('height', d => (d.tokens / maxTokens) * d.r * 2)
       .attr('fill', d => (ARCH_COLORS[d.category] || ARCH_COLORS.state).stroke)
-      .attr('opacity', 0.08);
+      .attr('opacity', 0.2);
 
-    // Node label
-    nodeGs.append('text')
+    // Node label (auto-sized to fit)
+    archNodeGs.append('text')
       .attr('text-anchor', 'middle')
       .attr('dominant-baseline', 'central')
       .attr('fill', d => (ARCH_COLORS[d.category] || ARCH_COLORS.state).text)
-      .attr('font-size', d => d.r > 40 ? 11 : d.r > 25 ? 9 : 7)
       .attr('font-weight', 500)
       .attr('font-family', 'var(--font-mono)')
-      .text(d => {
+      .each(function(d) {
         const name = d.name.replace('.md', '');
-        return name.length > 14 ? name.slice(0, 12) + '\u2026' : name;
+        const maxWidth = d.r * 1.6;
+        let fontSize = d.r > 40 ? 12 : d.r > 28 ? 10 : 8;
+        let label = name;
+        // Shrink to fit
+        const el = d3.select(this);
+        el.attr('font-size', fontSize).text(label);
+        // Try truncation if needed (approximate: ~0.6em per char)
+        while (label.length > 3 && label.length * fontSize * 0.6 > maxWidth) {
+          label = name.slice(0, label.length - 2) + '\u2026';
+          fontSize = Math.max(fontSize - 0.5, 6);
+        }
+        el.attr('font-size', fontSize).text(label);
       });
 
-    // Token count below node
-    nodeGs.append('text')
-      .attr('class', 'arch-token-label')
-      .attr('y', d => d.r + 14)
-      .attr('text-anchor', 'middle')
-      .attr('fill', 'var(--text-muted)')
-      .attr('font-size', 9)
-      .attr('font-family', 'var(--font-mono)')
-      .text(d => d.tokens > 1000 ? Math.round(d.tokens / 1000) + 'K tok' : d.tokens + ' tok');
-
-    // Category badge above node
-    nodeGs.append('text')
-      .attr('y', d => -d.r - 8)
-      .attr('text-anchor', 'middle')
-      .attr('fill', d => (ARCH_COLORS[d.category] || ARCH_COLORS.state).stroke)
-      .attr('font-size', 8)
-      .attr('font-family', 'var(--font-sans)')
-      .attr('opacity', 0.6)
-      .text(d => d.category.toUpperCase());
+    // Node hover — show hover card + highlight connections
+    archNodeGs
+      .on('mouseenter', (event, d) => { showArchHoverCard(event, d); highlightConnections(d); })
+      .on('mousemove', (event) => { moveArchHoverCard(event); })
+      .on('mouseleave', () => { hideArchHoverCard(); clearHighlights(); });
 
     // Simulation tick
     archSim.on('tick', () => {
-      nodeGs.attr('transform', d => `translate(${d.x},${d.y})`);
-      linkPaths.attr('d', d => {
-        const dx = d.target.x - d.source.x;
-        const dy = d.target.y - d.source.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const sr = d.source.r + 4;
-        const tr = d.target.r + 10;
-        const sx = d.source.x + (dx / dist) * sr;
-        const sy = d.source.y + (dy / dist) * sr;
-        const tx = d.target.x - (dx / dist) * tr;
-        const ty = d.target.y - (dy / dist) * tr;
-        // Slight curve for readability
-        const mx = (sx + tx) / 2 - dy * 0.08;
-        const my = (sy + ty) / 2 + dx * 0.08;
-        return `M${sx},${sy} Q${mx},${my} ${tx},${ty}`;
-      });
+      archNodeGs.attr('transform', d => `translate(${d.x},${d.y})`);
+      linkPaths.attr('d', archLinkPath);
+      archLinkGs.select('.arch-link-hover').attr('d', archLinkPath);
       linkLabels
-        .attr('x', d => (d.source.x + d.target.x) / 2)
-        .attr('y', d => (d.source.y + d.target.y) / 2 - 6);
+        .attr('x', d => ((typeof d.source === 'object' ? d.source.x : 0) + (typeof d.target === 'object' ? d.target.x : 0)) / 2)
+        .attr('y', d => ((typeof d.source === 'object' ? d.source.y : 0) + (typeof d.target === 'object' ? d.target.y : 0)) / 2 - 6);
     });
 
-    // Legend
-    const legend = container.append('g')
-      .attr('transform', `translate(20, ${height - 120})`);
+    // Build HTML legend
+    renderArchLegend();
+    // Update health summary
+    updateArchHealthSummary();
+  }
 
-    const legendItems = [
-      { label: 'Hub', color: ARCH_COLORS.hub.stroke },
-      { label: 'Rules', color: ARCH_COLORS.rules.stroke },
-      { label: 'Input', color: ARCH_COLORS.input.stroke },
-      { label: 'State', color: ARCH_COLORS.state.stroke },
+  function archLinkPath(d) {
+    const src = typeof d.source === 'object' ? d.source : archNodeById.get(d.source);
+    const tgt = typeof d.target === 'object' ? d.target : archNodeById.get(d.target);
+    if (!src || !tgt) return '';
+    const dx = tgt.x - src.x;
+    const dy = tgt.y - src.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const sr = src.r + 4;
+    const tr = tgt.r + 10;
+    const sx = src.x + (dx / dist) * sr;
+    const sy = src.y + (dy / dist) * sr;
+    const tx = tgt.x - (dx / dist) * tr;
+    const ty = tgt.y - (dy / dist) * tr;
+    const mx = (sx + tx) / 2 - dy * 0.08;
+    const my = (sy + ty) / 2 + dx * 0.08;
+    return `M${sx},${sy} Q${mx},${my} ${tx},${ty}`;
+  }
+
+  // Hover card management
+  function showArchHoverCard(event, d) {
+    const card = document.getElementById('arch-hover-card');
+    card.querySelector('.ahc-name').textContent = d.name;
+    card.querySelector('.ahc-desc').textContent = d.description || d.category + ' document';
+
+    const tokenStr = d.tokens > 1000 ? Math.round(d.tokens / 1000) + 'K' : d.tokens;
+    const sizeStr = d.size > 1024 ? Math.round(d.size / 1024) + 'KB' : d.size + 'B';
+    card.querySelector('.ahc-stats').innerHTML =
+      `<span><span class="ahc-stat-val">${tokenStr}</span> tokens</span>` +
+      `<span><span class="ahc-stat-val">${sizeStr}</span></span>` +
+      `<span><span class="ahc-stat-val">${getTimeAgo(d.mtime)}</span></span>`;
+
+    // Find connections
+    const conns = [];
+    if (archLinks) {
+      archLinks.forEach(l => {
+        const sid = typeof l.source === 'object' ? l.source.id : l.source;
+        const tid = typeof l.target === 'object' ? l.target.id : l.target;
+        if (sid === d.id) {
+          const tgt = archNodeById.get(tid);
+          conns.push(`<span class="ahc-conn-type">${l.type}</span> → <span class="ahc-conn-target">${tgt?.name || tid}</span>`);
+        } else if (tid === d.id) {
+          const src = archNodeById.get(sid);
+          conns.push(`<span class="ahc-conn-target">${src?.name || sid}</span> → <span class="ahc-conn-type">${l.type}</span>`);
+        }
+      });
+    }
+    card.querySelector('.ahc-connections').innerHTML = conns.length ? conns.join('<br>') : '<em>No connections</em>';
+
+    moveArchHoverCard(event);
+    card.classList.add('visible');
+  }
+
+  function moveArchHoverCard(event) {
+    const card = document.getElementById('arch-hover-card');
+    let x = event.clientX + 16;
+    let y = event.clientY + 16;
+    if (x + 290 > window.innerWidth) x = event.clientX - 296;
+    if (y + card.offsetHeight > window.innerHeight) y = event.clientY - card.offsetHeight - 10;
+    card.style.left = x + 'px';
+    card.style.top = y + 'px';
+  }
+
+  function hideArchHoverCard() {
+    document.getElementById('arch-hover-card').classList.remove('visible');
+  }
+
+  function highlightConnections(d) {
+    const connectedIds = new Set([d.id]);
+    if (archLinks) {
+      archLinks.forEach(l => {
+        const sid = typeof l.source === 'object' ? l.source.id : l.source;
+        const tid = typeof l.target === 'object' ? l.target.id : l.target;
+        if (sid === d.id) connectedIds.add(tid);
+        if (tid === d.id) connectedIds.add(sid);
+      });
+    }
+    // Dim unconnected nodes
+    archNodeGs.classed('dimmed', n => !connectedIds.has(n.id));
+    // Highlight connected links
+    archLinkGs.select('.arch-link').classed('highlighted', l => {
+      const sid = typeof l.source === 'object' ? l.source.id : l.source;
+      const tid = typeof l.target === 'object' ? l.target.id : l.target;
+      return sid === d.id || tid === d.id;
+    });
+  }
+
+  function clearHighlights() {
+    if (archNodeGs) archNodeGs.classed('dimmed', false);
+    if (archLinkGs) archLinkGs.select('.arch-link').classed('highlighted', false);
+  }
+
+  // Tooltip for links (reuses existing #tooltip)
+  function showArchTooltip(event, title, detail) {
+    const tt = document.getElementById('tooltip');
+    tt.innerHTML = `<div class="tt-message">${title}</div>` +
+      (detail ? `<div class="tt-meta">${detail}</div>` : '');
+    tt.style.left = (event.clientX + 12) + 'px';
+    tt.style.top = (event.clientY + 12) + 'px';
+    tt.classList.add('visible');
+  }
+
+  function hideArchTooltip() {
+    document.getElementById('tooltip').classList.remove('visible');
+  }
+
+  // Health summary
+  function updateArchHealthSummary() {
+    if (!archNodes) return;
+    let active = 0, recent = 0, stale = 0, totalTokens = 0;
+    archNodes.forEach(n => {
+      const tier = getFreshnessTier(n.mtime);
+      if (tier === 'active') active++;
+      else if (tier === 'recent') recent++;
+      else stale++;
+      totalTokens += n.tokens || 0;
+    });
+    document.getElementById('ahs-active').textContent = active;
+    document.getElementById('ahs-recent').textContent = recent;
+    document.getElementById('ahs-stale').textContent = stale;
+    const tokStr = totalTokens > 1000 ? Math.round(totalTokens / 1000) + 'K' : totalTokens;
+    document.getElementById('ahs-tokens').textContent = tokStr;
+  }
+
+  // Legend (HTML overlay)
+  function renderArchLegend() {
+    const el = document.getElementById('arch-legend');
+    const cats = [
+      { label: 'Hub', color: ARCH_COLORS.hub.stroke, cat: 'hub' },
+      { label: 'Input', color: ARCH_COLORS.input.stroke, cat: 'input' },
+      { label: 'Rules', color: ARCH_COLORS.rules.stroke, cat: 'rules' },
+      { label: 'State', color: ARCH_COLORS.state.stroke, cat: 'state' },
     ];
-    legendItems.forEach((item, i) => {
-      const g = legend.append('g').attr('transform', `translate(0, ${i * 20})`);
-      g.append('circle').attr('r', 5).attr('fill', item.color).attr('opacity', 0.6);
-      g.append('text').attr('x', 14).attr('y', 4)
-        .attr('fill', 'var(--text-muted)').attr('font-size', 10)
-        .text(item.label);
+    const linkTypes = [
+      { type: 'reads', dashed: true }, { type: 'writes', dashed: false },
+      { type: 'defines', dashed: false }, { type: 'extends', dashed: false },
+      { type: 'enforces', dashed: false },
+    ];
+    const freshItems = [
+      { label: 'Active (<4h)', color: '#22c55e' },
+      { label: 'Recent (<48h)', color: '#f59e0b' },
+    ];
+    let html = '<div class="al-section">';
+    cats.forEach(c => {
+      html += `<div class="al-item" data-legend-cat="${c.cat}"><span class="al-dot" style="background:${c.color};width:8px;height:8px;border-radius:50%;display:inline-block"></span>${c.label}</div>`;
     });
+    html += '</div><div class="al-section">';
+    linkTypes.forEach(l => {
+      const dash = l.dashed ? 'border-top-style:dashed' : 'border-top-style:solid';
+      html += `<div class="al-item"><span class="al-line" style="border-top-color:${LINK_COLORS[l.type]};${dash};display:inline-block;width:20px;height:0"></span>${l.type}</div>`;
+    });
+    html += '</div><div class="al-section">';
+    freshItems.forEach(f => {
+      html += `<div class="al-item"><span style="width:10px;height:10px;border-radius:50%;border:2px solid ${f.color};display:inline-block"></span>${f.label}</div>`;
+    });
+    html += '</div>';
+    el.innerHTML = html;
 
-    const linkLegend = container.append('g')
-      .attr('transform', `translate(20, ${height - 120 + legendItems.length * 20 + 10})`);
-    const linkTypes = ['reads', 'writes', 'defines', 'extends', 'enforces'];
-    linkTypes.forEach((type, i) => {
-      const g = linkLegend.append('g').attr('transform', `translate(${i * 70}, 0)`);
-      g.append('line').attr('x1', 0).attr('y1', 0).attr('x2', 20).attr('y2', 0)
-        .attr('stroke', LINK_COLORS[type]).attr('stroke-width', 1.5);
-      g.append('text').attr('x', 24).attr('y', 4)
-        .attr('fill', 'var(--text-muted)').attr('font-size', 9)
-        .text(type);
+    // Legend category hover → highlight matching nodes
+    el.querySelectorAll('[data-legend-cat]').forEach(item => {
+      item.addEventListener('mouseenter', () => {
+        const cat = item.dataset.legendCat;
+        if (archNodeGs) archNodeGs.classed('dimmed', n => n.category !== cat);
+      });
+      item.addEventListener('mouseleave', () => {
+        if (archNodeGs) archNodeGs.classed('dimmed', false);
+      });
     });
   }
 
   function openArchDoc(doc) {
     document.getElementById('arch-doc-title').textContent = doc.name;
     document.getElementById('arch-doc-meta').textContent =
-      `${doc.tokens > 1000 ? Math.round(doc.tokens / 1000) + 'K' : doc.tokens} tokens | ${doc.category}`;
+      `${doc.tokens > 1000 ? Math.round(doc.tokens / 1000) + 'K' : doc.tokens} tokens | ${doc.category} | ${getTimeAgo(doc.mtime)}`;
     document.getElementById('arch-doc-content').textContent = doc.content || '(empty)';
     document.getElementById('arch-doc-panel').classList.add('open');
   }
@@ -6373,32 +6673,52 @@ Auth: tokens refreshed, no anomalies`;
     document.getElementById('arch-doc-panel').classList.remove('open');
   });
 
-  // Handle doc_change SSE events — animate pulse on changed node
+  // Handle doc_change SSE events
   function handleDocChange(data) {
     if (!archData) return;
     const svg = d3.select('#arch-graph');
     const node = svg.selectAll('.arch-node').filter(d => d.id === data.id);
     if (node.empty()) return;
 
-    // Update token count
     const doc = archData.documents.find(d => d.id === data.id);
     if (doc) {
       doc.tokens = data.tokens;
       doc.size = data.size;
       doc.mtime = data.mtime;
     }
-
-    // Update token label
-    node.select('.arch-token-label')
-      .text(data.tokens > 1000 ? Math.round(data.tokens / 1000) + 'K tok' : data.tokens + ' tok');
+    // Also update in archNodes
+    const archNode = archNodes?.find(n => n.id === data.id);
+    if (archNode) {
+      archNode.tokens = data.tokens;
+      archNode.size = data.size;
+      archNode.mtime = data.mtime;
+    }
 
     // Pulse the node ring
     const ring = node.select('.arch-node-ring');
-    const col = (ARCH_COLORS[doc?.category] || ARCH_COLORS.state).stroke;
     ring.transition().duration(200)
       .attr('stroke-opacity', 1).attr('stroke-width', 3)
       .transition().duration(800)
       .attr('stroke-opacity', 0.6).attr('stroke-width', 1.5);
+
+    // Update freshness ring
+    const tier = getFreshnessTier(data.mtime);
+    const fc = getFreshnessColor(tier);
+    node.select('.arch-freshness-ring')
+      .attr('stroke', fc || 'transparent')
+      .attr('stroke-opacity', fc ? 0.6 : 0);
+
+    // Ripple animation (expanding circle that fades)
+    const ripple = node.append('circle')
+      .attr('r', archNode ? archNode.r : 30)
+      .attr('fill', 'none')
+      .attr('stroke', (ARCH_COLORS[doc?.category] || ARCH_COLORS.state).stroke)
+      .attr('stroke-width', 2)
+      .attr('stroke-opacity', 0.6);
+    ripple.transition().duration(1200)
+      .attr('r', (archNode ? archNode.r : 30) + 40)
+      .attr('stroke-opacity', 0)
+      .remove();
 
     // Float a delta indicator
     if (data.delta !== 0) {
@@ -6418,6 +6738,9 @@ Auth: tokens refreshed, no anomalies`;
         .attr('opacity', 0)
         .remove();
     }
+
+    // Update health summary
+    updateArchHealthSummary();
   }
 
   // View toggle logic
@@ -6438,10 +6761,14 @@ Auth: tokens refreshed, no anomalies`;
         hudBar.style.display = 'none';
         missionStatus.style.display = 'none';
         activityFeed.style.display = 'none';
-        archView.style.display = 'flex';
+        archView.style.display = 'block';
+        document.getElementById('arch-health-summary').style.display = 'block';
+        document.getElementById('arch-legend').style.display = 'block';
         initArchView();
       } else {
         archView.style.display = 'none';
+        document.getElementById('arch-health-summary').style.display = 'none';
+        document.getElementById('arch-legend').style.display = 'none';
         canvasContainer.style.display = '';
         hudBar.style.display = '';
         missionStatus.style.display = '';

@@ -4174,26 +4174,28 @@ svg#main-viz {
 
   function updateDataParticles(linkData) {
     // Spawn new particles — rate and speed based on token throughput
-    if (state.time % 8 === 0) {
-      linkData.forEach(link => {
-        if (link.target.status !== 'active') return;
-        const tokens = link.target.tokens ? link.target.tokens.total : 0;
-        const throughput = Math.min(1, tokens / 40000); // normalize against 40K
-        // Spawn rate: low-throughput agents rarely spawn, high-throughput flood
-        const spawnChance = 0.15 + throughput * 0.7; // 15-85%
-        if (Math.random() > spawnChance) return;
-        // Speed: 20x range — slow crawl (0.003) to fast zip (0.06)
-        const speed = 0.003 + throughput * throughput * 0.057 + Math.random() * 0.003;
-        state.dataParticles.push({
-          id: 'dp-' + Math.random().toString(36).slice(2),
-          source: link.source,
-          target: link.target,
-          cpx: link.cpx, cpy: link.cpy,
-          t: 0,
-          speed,
-        });
+    // Spawn interval varies per agent — busy agents spawn every few frames, quiet ones rarely
+    linkData.forEach(link => {
+      if (link.target.status !== 'active') return;
+      const tokens = link.target.tokens ? link.target.tokens.total : 0;
+      const throughput = Math.min(1, tokens / 40000);
+      // Spawn interval: high throughput = every 3-4 frames, low = every 30-40 frames
+      const interval = Math.max(3, Math.round(35 - throughput * 32));
+      if (state.time % interval !== 0) return;
+      // Additional spawn chance for variation
+      const spawnChance = 0.4 + throughput * 0.55; // 40-95%
+      if (Math.random() > spawnChance) return;
+      // Speed: 20x range — slow crawl (0.003) to fast zip (0.06)
+      const speed = 0.003 + throughput * throughput * 0.057 + Math.random() * 0.003;
+      state.dataParticles.push({
+        id: 'dp-' + Math.random().toString(36).slice(2),
+        source: link.source,
+        target: link.target,
+        cpx: link.cpx, cpy: link.cpy,
+        t: 0,
+        speed,
       });
-    }
+    });
     // Advance and cull
     state.dataParticles.forEach(dp => { dp.t += dp.speed; });
     state.dataParticles = state.dataParticles.filter(dp => dp.t < 1);

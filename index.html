@@ -389,6 +389,47 @@ svg#main-viz {
   border-bottom: 1px solid var(--border-subtle);
 }
 
+/* Commit detail panel */
+.commit-file-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.commit-file-entry:last-child { border-bottom: none; }
+.commit-file-name {
+  color: var(--text-secondary);
+  word-break: break-all;
+  flex: 1;
+  min-width: 0;
+}
+.commit-file-changes {
+  color: var(--text-muted);
+  white-space: nowrap;
+  margin-left: 8px;
+  font-size: 10px;
+}
+.commit-type-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(74,158,255,0.15);
+  color: var(--accent-blue);
+}
+.commit-goal-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(244,114,182,0.15);
+  color: var(--accent-pink, #f472b6);
+}
+
 /* Current task card */
 .task-card {
   background: var(--bg-card);
@@ -2022,6 +2063,7 @@ svg#main-viz {
   <div class="sidebar-tab" data-panel="goals" title="Goals">&#9673;</div>
   <div class="sidebar-tab" data-panel="system" title="System Architecture">&#9055;</div>
   <div class="sidebar-tab" data-panel="logs" title="Logs &amp; Alerts">&#9776;</div>
+  <div class="sidebar-tab" data-panel="commit" title="Commit Detail">&#9679;</div>
   <div class="sidebar-tab" data-panel="raw" title="Raw Data">&#60;/&#62;</div>
 </div>
 
@@ -2123,6 +2165,22 @@ svg#main-viz {
     <div id="log-container">
       <div style="font-size:12px;color:var(--text-muted);">No log entries</div>
     </div>
+  </div>
+
+  <!-- Commit Detail Panel -->
+  <div class="sidebar-panel" id="panel-commit">
+    <div class="panel-header">Commit Detail</div>
+    <div id="commit-detail-empty" style="font-size:12px;color:var(--text-muted);">Click a commit circle or synapse node to view details.</div>
+    <div id="commit-detail-content" style="display:none;">
+      <div id="commit-detail-hash" style="font-family:var(--font-mono);font-size:12px;color:var(--accent-cyan);margin-bottom:4px;"></div>
+      <div id="commit-detail-subject" style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:8px;line-height:1.4;"></div>
+      <div id="commit-detail-meta" style="font-size:11px;color:var(--text-muted);margin-bottom:12px;display:flex;gap:12px;flex-wrap:wrap;"></div>
+      <div id="commit-detail-body" style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:14px;white-space:pre-wrap;display:none;"></div>
+      <div id="commit-detail-summary" style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);margin-bottom:10px;"></div>
+      <div class="panel-header" style="margin-top:4px;">Changed Files</div>
+      <div id="commit-detail-files" style="font-size:11px;font-family:var(--font-mono);"></div>
+    </div>
+    <div id="commit-detail-loading" style="display:none;font-size:12px;color:var(--text-muted);">Loading...</div>
   </div>
 
   <!-- Raw Panel -->
@@ -2785,7 +2843,8 @@ svg#main-viz {
       })
       .on('mouseleave', function() {
         document.getElementById('tooltip').classList.remove('visible');
-      });
+      })
+      .on('click', function(event, d) { showCommitDetail(d); });
     sEnter.transition().duration(800).attr('d', diamondPath(4));
 
     sEnter.merge(sNodes)
@@ -3240,7 +3299,8 @@ svg#main-viz {
       .style('cursor', 'pointer')
       .on('mouseenter', function(event, d) { showTooltip(event, d); })
       .on('mousemove', function(event, d) { moveTooltip(event); })
-      .on('mouseleave', function() { hideTooltip(); });
+      .on('mouseleave', function() { hideTooltip(); })
+      .on('click', function(event, d) { showCommitDetail(d.commit); });
 
     // Invisible hit area (larger than visual circle for easier hover)
     entering.append('circle')
@@ -3460,6 +3520,127 @@ svg#main-viz {
     state.sidebarOpen = true;
     state.activePanel = panelName;
     document.getElementById('sidebar').classList.add('open');
+  }
+
+  // ----------------------------------------------------------
+  // Commit Detail
+  // ----------------------------------------------------------
+  function showCommitDetail(commit) {
+    // Open sidebar to commit panel
+    openSidebarPanel('commit');
+
+    const emptyEl = document.getElementById('commit-detail-empty');
+    const contentEl = document.getElementById('commit-detail-content');
+    const loadingEl = document.getElementById('commit-detail-loading');
+
+    // Show loading, hide others
+    emptyEl.style.display = 'none';
+    contentEl.style.display = 'none';
+    loadingEl.style.display = 'block';
+
+    // Fill basic info immediately from local data
+    const hash = commit.hash || '';
+    document.getElementById('commit-detail-hash').textContent = hash;
+    document.getElementById('commit-detail-subject').textContent = commit.message || commit.subject || '';
+
+    // Build meta line
+    const metaEl = document.getElementById('commit-detail-meta');
+    const dateStr = commit.date || '';
+    const dateLabel = dateStr ? new Date(dateStr).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    const typeLabel = commit.type || '';
+    const goalLabel = commit.goal || '';
+    metaEl.innerHTML = '';
+    if (dateLabel) {
+      const span = document.createElement('span');
+      span.textContent = dateLabel;
+      span.style.color = 'var(--text-muted)';
+      metaEl.appendChild(span);
+    }
+    if (typeLabel) {
+      const badge = document.createElement('span');
+      badge.className = 'commit-type-badge';
+      badge.textContent = typeLabel;
+      metaEl.appendChild(badge);
+    }
+    if (goalLabel) {
+      const badge = document.createElement('span');
+      badge.className = 'commit-goal-badge';
+      badge.textContent = goalLabel;
+      metaEl.appendChild(badge);
+    }
+
+    // Fetch detailed info from backend
+    fetch('/api/commit/' + hash)
+      .then(r => r.json())
+      .then(data => {
+        loadingEl.style.display = 'none';
+        contentEl.style.display = 'block';
+
+        if (data.error) {
+          document.getElementById('commit-detail-subject').textContent = commit.message || 'Unknown commit';
+          document.getElementById('commit-detail-files').innerHTML = '<div style="color:var(--text-muted);">Could not load diff details.</div>';
+          document.getElementById('commit-detail-summary').textContent = '';
+          document.getElementById('commit-detail-body').style.display = 'none';
+          return;
+        }
+
+        // Update with richer data from API
+        if (data.subject) {
+          document.getElementById('commit-detail-subject').textContent = data.subject;
+        }
+        if (data.author) {
+          const authorSpan = document.createElement('span');
+          authorSpan.textContent = data.author;
+          authorSpan.style.color = 'var(--accent-green)';
+          metaEl.insertBefore(authorSpan, metaEl.firstChild);
+        }
+
+        // Body (multi-line commit message beyond subject)
+        const bodyEl = document.getElementById('commit-detail-body');
+        const bodyLines = (data.body || '').split('\n').slice(1).join('\n').trim();
+        if (bodyLines) {
+          bodyEl.textContent = bodyLines;
+          bodyEl.style.display = 'block';
+        } else {
+          bodyEl.style.display = 'none';
+        }
+
+        // Summary line
+        document.getElementById('commit-detail-summary').textContent = data.summary || '';
+
+        // Files list
+        const filesEl = document.getElementById('commit-detail-files');
+        filesEl.innerHTML = '';
+        if (data.files && data.files.length > 0) {
+          data.files.forEach(f => {
+            const entry = document.createElement('div');
+            entry.className = 'commit-file-entry';
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'commit-file-name';
+            nameSpan.textContent = f.name;
+            const changesSpan = document.createElement('span');
+            changesSpan.className = 'commit-file-changes';
+            changesSpan.textContent = f.changes;
+            // Color the +/- indicators
+            const changesText = f.changes || '';
+            if (changesText.includes('+') && !changesText.includes('-')) {
+              changesSpan.style.color = 'var(--accent-green)';
+            } else if (changesText.includes('-') && !changesText.includes('+')) {
+              changesSpan.style.color = '#f87171';
+            }
+            entry.appendChild(nameSpan);
+            entry.appendChild(changesSpan);
+            filesEl.appendChild(entry);
+          });
+        } else {
+          filesEl.innerHTML = '<div style="color:var(--text-muted);">No files changed.</div>';
+        }
+      })
+      .catch(() => {
+        loadingEl.style.display = 'none';
+        contentEl.style.display = 'block';
+        document.getElementById('commit-detail-files').innerHTML = '<div style="color:var(--text-muted);">Failed to load details.</div>';
+      });
   }
 
   // ----------------------------------------------------------
@@ -7252,10 +7433,20 @@ Auth: tokens refreshed, no anomalies`;
         archView.style.display = 'none';
         document.getElementById('arch-health-summary').style.display = 'none';
         document.getElementById('arch-legend').style.display = 'none';
+        // Cancel arch flow animation
+        if (archFlowAnimFrame) {
+          cancelAnimationFrame(archFlowAnimFrame);
+          archFlowAnimFrame = null;
+        }
         canvasContainer.style.display = '';
         hudBar.style.display = '';
         missionStatus.style.display = '';
         activityFeed.style.display = '';
+        // Reinitialize canvas in case window resized while in arch view
+        state.width = window.innerWidth;
+        state.height = window.innerHeight;
+        initBgCanvas();
+        layoutColonies();
       }
     });
   });

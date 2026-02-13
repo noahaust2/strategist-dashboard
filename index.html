@@ -1094,6 +1094,15 @@ svg#main-viz {
   width: fit-content;
 }
 
+#agent-detail-description {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  padding: 4px 0 6px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 4px;
+}
+
 #agent-detail-goal {
   font-size: 11px;
   color: var(--accent-amber);
@@ -2034,6 +2043,7 @@ svg#main-viz {
 <div id="agent-detail">
   <div id="agent-detail-name"></div>
   <div id="agent-detail-status"></div>
+  <div id="agent-detail-description"></div>
   <div id="agent-detail-goal"></div>
   <div id="agent-detail-action"></div>
   <div id="agent-detail-tool"></div>
@@ -4015,6 +4025,72 @@ svg#main-viz {
   // ----------------------------------------------------------
   const AGENT_COLORS = ['blue', 'green', 'amber', 'cyan', 'rose'];
 
+  // Generate a plain-English description of what an agent is currently doing
+  function describeAgentActivity(agent) {
+    if (agent.status === 'idle') return 'Idle — waiting for input';
+    if (agent.status === 'done') return 'Finished working';
+
+    const tool = agent.currentTool || '';
+    const action = agent.currentAction || '';
+
+    // Derive a short plain-English summary from tool + action
+    if (tool === 'Read' || action.startsWith('Read:')) {
+      const file = action.replace(/^Read:\s*/, '');
+      return file ? `Reading ${file}` : 'Reading a file';
+    }
+    if (tool === 'Grep' || action.startsWith('Grep:')) {
+      const pat = action.replace(/^Grep:\s*/, '');
+      return pat ? `Searching code for "${pat}"` : 'Searching through code';
+    }
+    if (tool === 'Glob' || action.startsWith('Glob:')) {
+      const pat = action.replace(/^Glob:\s*/, '');
+      return pat ? `Finding files matching ${pat}` : 'Finding files';
+    }
+    if (tool === 'Edit' || action.startsWith('Editing')) {
+      const file = action.replace(/^Editing\s*/, '');
+      return file ? `Editing ${file}` : 'Editing a file';
+    }
+    if (tool === 'Write' || action.startsWith('Writing')) {
+      const file = action.replace(/^Writing\s*/, '');
+      return file ? `Writing ${file}` : 'Writing a file';
+    }
+    if (tool === 'Bash' || action.startsWith('Running:')) {
+      const cmd = action.replace(/^Running:\s*/, '');
+      if (cmd.startsWith('git ')) return `Running git (${cmd.slice(4, 30).trim()})`;
+      if (cmd.startsWith('npm ') || cmd.startsWith('npx ')) return `Running ${cmd.slice(0, 30).trim()}`;
+      return cmd ? `Running a command` : 'Executing a shell command';
+    }
+    if (tool === 'Task' || action.startsWith('Agent:') || action.startsWith('Spawning')) {
+      const desc = action.replace(/^Agent:\s*/, '').replace(/^Spawning\s*/, '');
+      return desc && desc !== 'agent' ? `Delegating: ${desc}` : 'Spawning a subagent';
+    }
+    if (tool === 'WebSearch' || action.startsWith('Searching:')) {
+      const q = action.replace(/^Searching:\s*/, '');
+      return q ? `Searching the web for "${q}"` : 'Searching the web';
+    }
+    if (tool === 'WebFetch') return 'Fetching a web page';
+    if (tool === 'TodoWrite' || action === 'Updating task list') return 'Updating its task list';
+    if (tool === 'Skill' || action.startsWith('Skill:')) {
+      const s = action.replace(/^Skill:\s*/, '');
+      return s ? `Running skill: ${s}` : 'Running a skill';
+    }
+    if (tool === 'SendMessage') return 'Messaging a teammate';
+    if (tool === 'NotebookEdit') return 'Editing a notebook';
+
+    // Fallback: use reasoning if available
+    if (agent.reasoning && agent.reasoning.length > 0) {
+      const last = agent.reasoning[agent.reasoning.length - 1];
+      const text = typeof last === 'string' ? last : last.text || '';
+      if (text.length > 5) {
+        const trimmed = text.slice(0, 50).replace(/\s+/g, ' ').trim();
+        return trimmed + (text.length > 50 ? '...' : '');
+      }
+    }
+
+    if (action && action.length > 1) return action.slice(0, 40);
+    return 'Working...';
+  }
+
   // Get color key for an agent — uses goal's colony color if assigned, else cycles palette
   function agentColorKey(agent, agents) {
     if (agent.goalId && state.colonies.has(agent.goalId)) {
@@ -4446,6 +4522,7 @@ svg#main-viz {
         document.getElementById('tooltip').classList.remove('visible');
       });
     entering.append('text').attr('class', 'agent-node-label');
+    entering.append('text').attr('class', 'agent-node-subtitle');
     entering.append('text').attr('class', 'agent-node-action');
     entering.append('rect').attr('class', 'agent-tool-bg');
     entering.append('text').attr('class', 'agent-node-tool-badge');
@@ -4608,6 +4685,18 @@ svg#main-viz {
       .attr('text-anchor', 'middle')
       .text(d => d.label);
 
+    // Plain-English subtitle below name — what the agent is doing
+    merged.select('.agent-node-subtitle')
+      .attr('y', d => d.nodeRadius + 26 * invZoom)
+      .attr('fill', 'var(--text-muted)')
+      .attr('font-size', 8.5 * invZoom)
+      .attr('opacity', state.zoom > 1.5 ? 0.5 : 0)
+      .attr('text-anchor', 'middle')
+      .text(d => {
+        const desc = describeAgentActivity(d);
+        return desc.length > 40 ? desc.slice(0, 38) + '\u2026' : desc;
+      });
+
     // Tool badge — show currentAction for detail (e.g. "Read: STATE.md")
     // Idle agents show empty badge (stale actions are misleading)
     const badgeText = d => {
@@ -4623,7 +4712,7 @@ svg#main-viz {
     merged.select('.agent-tool-bg')
       .attr('opacity', showTools ? 0.8 : 0)
       .attr('x', d => -(Math.min(90, badgeLen(d) * 3.5 + 8)) * invZoom)
-      .attr('y', d => d.nodeRadius + 24 * invZoom)
+      .attr('y', d => d.nodeRadius + 36 * invZoom)
       .attr('width', d => Math.min(180, badgeLen(d) * 7 + 16) * invZoom)
       .attr('height', 14 * invZoom)
       .attr('rx', 3 * invZoom)
@@ -4633,7 +4722,7 @@ svg#main-viz {
 
     merged.select('.agent-node-tool-badge')
       .attr('opacity', showTools ? 0.8 : 0)
-      .attr('y', d => d.nodeRadius + 35 * invZoom)
+      .attr('y', d => d.nodeRadius + 47 * invZoom)
       .attr('fill', 'var(--accent-cyan)')
       .attr('font-size', 10 * invZoom)
       .text(d => {
@@ -4828,6 +4917,10 @@ svg#main-viz {
     const statusBgs = { active: 'rgba(52,211,153,0.15)', idle: 'rgba(96,96,128,0.15)', done: 'rgba(74,158,255,0.15)' };
     statusEl.style.color = statusColors[agent.status] || statusColors.idle;
     statusEl.style.background = statusBgs[agent.status] || statusBgs.idle;
+
+    // Plain-English description of what the agent is doing
+    const descEl = document.getElementById('agent-detail-description');
+    descEl.textContent = describeAgentActivity(agent);
 
     // Goal assignment
     const goalEl = document.getElementById('agent-detail-goal');

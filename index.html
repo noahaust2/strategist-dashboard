@@ -1503,18 +1503,18 @@ svg#main-viz {
 </div>
 
 <div id="hud-bar">
-  <div id="hud-health">
+  <div id="hud-health" title="System health — green: healthy, yellow: degraded, red: down">
     <div class="hud-dot" id="hud-health-dot"></div>
     <span class="hud-status-text" id="hud-status-text">Initializing...</span>
   </div>
-  <div id="hud-phase">
+  <div id="hud-phase" title="Agent loop phase — READ → DECIDE → EXECUTE → VERIFY → REPEAT">
     <div class="hud-phase-step pending" data-phase="read"></div>
     <div class="hud-phase-step pending" data-phase="decide"></div>
     <div class="hud-phase-step pending" data-phase="execute"></div>
     <div class="hud-phase-step pending" data-phase="verify"></div>
     <span class="hud-phase-label" id="hud-phase-label">--</span>
   </div>
-  <div id="hud-context">
+  <div id="hud-context" title="Context window usage — system / conversation / tools / thinking tokens">
     <div class="context-bar">
       <div class="ctx-segment ctx-system" id="ctx-system"></div>
       <div class="ctx-segment ctx-conversation" id="ctx-conversation"></div>
@@ -1523,7 +1523,7 @@ svg#main-viz {
     </div>
     <span class="context-label" id="ctx-label">0K / 200K</span>
   </div>
-  <div id="hud-growth">
+  <div id="hud-growth" title="Knowledge growth — 14-day learning trend from self-modifications">
     <svg id="hud-sparkline" width="40" height="16" viewBox="0 0 40 16"></svg>
     <span id="hud-growth-label" class="hud-growth-label"></span>
   </div>
@@ -2450,11 +2450,26 @@ svg#main-viz {
     const entering = docNodes.enter().append('g').attr('class', 'doc-node-g')
       .style('cursor', 'pointer')
       .on('mouseenter', function(event, d) {
-        // Show doc info in tooltip
         const tooltip = document.getElementById('tooltip');
-        tooltip.querySelector('.tt-message').textContent = d.name;
+        const DOC_DESCRIPTIONS = {
+          'STATE.md': 'Current operational state — position, decisions, blockers',
+          'GOALS.md': 'Master goals — what the system is trying to achieve',
+          'STRATEGY.md': 'Strategic plan — how goals will be accomplished',
+          'METRICS.md': 'Quantitative progress — KPIs and week-over-week trends',
+          'OPPORTUNITIES.md': 'Ranked idea board — proposed, approved, in-progress items',
+          'LOG.md': 'Daily narrative — focus areas, accomplishments, blockers',
+          'ASSETS.md': 'Available resources — financial, technical, skills, network',
+          'CLAUDE.md': 'System identity and core instructions',
+          'napkin.md': 'Working memory — mistakes, patterns, corrections',
+        };
+        const baseName = d.name.split('/').pop();
+        tooltip.querySelector('.tt-message').textContent = baseName;
         const freshLabel = d.hoursAgo < 1 ? 'just now' : d.hoursAgo < 24 ? Math.floor(d.hoursAgo) + 'h ago' : Math.floor(d.hoursAgo / 24) + 'd ago';
-        tooltip.querySelector('.tt-meta').textContent = freshLabel + ' \u2022 ' + d.size + ' bytes';
+        const desc = DOC_DESCRIPTIONS[baseName] || '';
+        tooltip.querySelector('.tt-meta').textContent = (desc ? desc + ' \u2022 ' : '') + freshLabel;
+        tooltip.querySelector('.tt-stat.add').textContent = '';
+        tooltip.querySelector('.tt-stat.del').textContent = '';
+        tooltip.querySelector('.tt-stat.files').textContent = d.size ? Math.round(d.size / 1024) + ' KB' : '';
         tooltip.style.left = event.clientX + 12 + 'px';
         tooltip.style.top = event.clientY - 10 + 'px';
         tooltip.classList.add('visible');
@@ -3352,6 +3367,26 @@ svg#main-viz {
     // Remove stale second ring if it exists
     agentTreeLayer.select('.health-heartbeat-2').remove();
 
+    // Rate limit / rest mode indicator — dashed constraint ring
+    let modeRing = agentTreeLayer.select('.mode-indicator-ring');
+    if (state.agentMode === 'rate_limited' || state.agentMode === 'rest') {
+      if (modeRing.empty()) {
+        modeRing = agentTreeLayer.append('circle').attr('class', 'mode-indicator-ring')
+          .attr('fill', 'none');
+      }
+      const modeColor = state.agentMode === 'rate_limited' ? '234,179,8' : '100,100,140';
+      const modeAlpha = 0.15 + Math.sin(state.time * 0.02) * 0.05;
+      modeRing
+        .attr('cx', hbCx).attr('cy', hbCy)
+        .attr('r', hbMaxR * 0.6)
+        .attr('stroke', `rgba(${modeColor},${modeAlpha})`)
+        .attr('stroke-width', 1)
+        .attr('stroke-dasharray', '4,6')
+        .attr('stroke-dashoffset', state.time * 0.3);
+    } else {
+      modeRing.remove();
+    }
+
     // Build link data with curve control points
     const linkData = agents.filter(a => a.parent && state.agents.has(a.parent)).map(a => {
       const source = state.agents.get(a.parent);
@@ -3379,6 +3414,23 @@ svg#main-viz {
     // Curved path links (tendrils)
     const links = agentTreeLayer.selectAll('.agent-link-path').data(linkData, d => d.id);
     links.enter().append('path').attr('class', 'agent-link-path')
+      .style('cursor', 'pointer')
+      .on('mouseenter', function(event, d) {
+        const tooltip = document.getElementById('tooltip');
+        const direction = d.source.label + ' → ' + d.target.label;
+        tooltip.querySelector('.tt-message').textContent = direction;
+        const status = d.target.status === 'active' ? 'Active data flow' : 'Connection';
+        tooltip.querySelector('.tt-meta').textContent = status;
+        tooltip.querySelector('.tt-stat.add').textContent = '';
+        tooltip.querySelector('.tt-stat.del').textContent = '';
+        tooltip.querySelector('.tt-stat.files').textContent = '';
+        tooltip.style.left = event.clientX + 12 + 'px';
+        tooltip.style.top = event.clientY - 10 + 'px';
+        tooltip.classList.add('visible');
+      })
+      .on('mouseleave', function() {
+        document.getElementById('tooltip').classList.remove('visible');
+      })
       .merge(links)
       .attr('d', d => `M${d.source.x},${d.source.y} Q${d.cpx},${d.cpy} ${d.target.x},${d.target.y}`)
       .attr('stroke', d => {
@@ -3421,6 +3473,8 @@ svg#main-viz {
     entering.append('text').attr('class', 'agent-node-tool-badge');
 
     const merged = entering.merge(nodeGroups);
+    // Rest/rate-limit dims all nodes
+    const modeDim = state.agentMode === 'rest' ? 0.4 : state.agentMode === 'rate_limited' ? 0.7 : 1;
     merged.each(function(d) {
       // Smooth entrance: scale up over 30 frames
       const age = state.time - (d._enterTime || 0);
@@ -3429,11 +3483,15 @@ svg#main-viz {
       const scale = 0.3 + 0.7 * eased;
       d3.select(this)
         .attr('transform', `translate(${d.x},${d.y}) scale(${scale})`)
-        .attr('opacity', eased);
+        .attr('opacity', eased * modeDim);
     });
 
-    // Node size breathes when active (encodes activity through motion)
-    const breatheScale = 1 + Math.sin(state.time * 0.04) * 0.06;
+    // Node size breathes when active — speed modulated by system mode
+    const modeBreatheMul = state.agentMode === 'rate_limited' ? 0.3
+                         : state.agentMode === 'stagnating' ? 0.15
+                         : state.agentMode === 'rest' ? 0.1
+                         : 1;
+    const breatheScale = 1 + Math.sin(state.time * 0.04 * modeBreatheMul) * 0.06;
 
     merged.select('.agent-node-bg')
       .attr('r', d => {
@@ -3559,6 +3617,22 @@ svg#main-viz {
     const goalTendrils = agentTreeLayer.selectAll('.goal-tendril').data(goalTendrilData, d => d.id);
     goalTendrils.enter().append('path').attr('class', 'goal-tendril')
       .attr('fill', 'none')
+      .style('cursor', 'pointer')
+      .on('mouseenter', function(event, d) {
+        const tooltip = document.getElementById('tooltip');
+        tooltip.querySelector('.tt-message').textContent = d.agent.label + ' → ' + (d.colony.goal.name || d.colony.id);
+        const status = d.agent.status === 'active' ? 'Actively working on this goal' : 'Assigned to this goal';
+        tooltip.querySelector('.tt-meta').textContent = status;
+        tooltip.querySelector('.tt-stat.add').textContent = '';
+        tooltip.querySelector('.tt-stat.del').textContent = '';
+        tooltip.querySelector('.tt-stat.files').textContent = '';
+        tooltip.style.left = event.clientX + 12 + 'px';
+        tooltip.style.top = event.clientY - 10 + 'px';
+        tooltip.classList.add('visible');
+      })
+      .on('mouseleave', function() {
+        document.getElementById('tooltip').classList.remove('visible');
+      })
       .merge(goalTendrils)
       .attr('d', d => {
         const ax = d.agent.x, ay = d.agent.y;

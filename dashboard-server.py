@@ -813,9 +813,78 @@ def scan_sessions():
     return agents
 
 
+# Mapping from file basenames / keywords to architecture document IDs.
+# Used to detect which architecture documents agents are accessing.
+_DOC_ID_MAP = {
+    "STATE": "STATE", "state.md": "STATE",
+    "GOALS": "GOALS", "goals.md": "GOALS",
+    "ASSETS": "ASSETS", "assets.md": "ASSETS",
+    "METRICS": "METRICS", "metrics.md": "METRICS",
+    "LOG": "LOG", "log.md": "LOG",
+    "OPPORTUNITIES": "OPPORTUNITIES", "opportunities.md": "OPPORTUNITIES",
+    "FAILURE-CATALOG": "FAILURE-CATALOG", "failure-catalog.md": "FAILURE-CATALOG",
+    "CLAUDE": "CLAUDE", "claude.md": "CLAUDE",
+    "reality-model-architecture": "reality-model-architecture",
+    "goal-advancement": "goal-advancement",
+    "task-lifecycle": "task-lifecycle",
+    "review-gate": "review-gate",
+    "approval-rules": "approval-rules",
+    "security": "security",
+    "usage-tracking": "usage-tracking",
+    "self-correction": "self-correction",
+    "model-strategy": "model-strategy",
+}
+
+
+def _extract_doc_activity(agents):
+    """Extract architecture document IDs being accessed by active agents.
+
+    Scans recentTools from each agent for file references that map to
+    architecture document IDs. Returns list of activity dicts.
+    """
+    activities = []
+    seen = set()
+
+    for agent in agents:
+        if agent.get("status") != "active":
+            continue
+        tools = agent.get("recentTools", [])
+        action = agent.get("currentAction", "")
+        # Include currentAction in the search
+        entries = tools[-5:] + ([action] if action else [])
+
+        for entry in entries:
+            if not entry:
+                continue
+            entry_lower = entry.lower()
+            # Determine activity type from the tool description
+            if any(kw in entry_lower for kw in ("read:", "reading", "grep:", "glob:")):
+                activity_type = "read"
+            elif any(kw in entry_lower for kw in ("edit", "writing", "write:")):
+                activity_type = "write"
+            else:
+                continue
+
+            # Try to match a document ID
+            for keyword, doc_id in _DOC_ID_MAP.items():
+                if keyword.lower() in entry_lower:
+                    key = (doc_id, activity_type)
+                    if key not in seen:
+                        seen.add(key)
+                        activities.append({
+                            "docId": doc_id,
+                            "type": activity_type,
+                            "agent": agent.get("label", ""),
+                        })
+                    break
+
+    return activities
+
+
 def session_poller():
     """Continuously scan for active sessions and broadcast updates."""
     prev_ids = set()
+    prev_activities = set()
     usage_tick = 0
     USAGE_EVERY = 10  # aggregate daily tokens every 10 polls (~30s)
     while True:
@@ -833,6 +902,14 @@ def session_poller():
                 "activeSessions": n,
             }))
             prev_ids = cur_ids
+
+        # Broadcast document activity for architecture view live flow
+        if agents:
+            activities = _extract_doc_activity(agents)
+            cur_activity_keys = {(a["docId"], a["type"]) for a in activities}
+            if cur_activity_keys != prev_activities:
+                broadcaster.broadcast("doc_activity", json.dumps(activities))
+                prev_activities = cur_activity_keys
 
         # Broadcast daily usage every USAGE_EVERY polls
         usage_tick += 1

@@ -2687,6 +2687,18 @@ svg#main-viz {
       });
     }
     state.daydreamSparks.push(spark);
+    // Also create a daydream link between colonies
+    if (sourceColony.particles.length > 0 && targetColony.particles.length > 0) {
+      const sp = sourceColony.particles[Math.floor(Math.random() * sourceColony.particles.length)];
+      const tp = targetColony.particles[Math.floor(Math.random() * targetColony.particles.length)];
+      state.daydreamLinks.push({
+        id: 'dd-spark-' + Date.now() + Math.random(),
+        source: sp, target: tp,
+        hit: Math.random() > 0.6,
+        opportunity: Math.random() > 0.7,
+        birth: state.time,
+      });
+    }
   }
 
   function renderDaydreamSparks() {
@@ -2884,6 +2896,9 @@ svg#main-viz {
       .remove();
 
     // Daydream connections — animated lightning arcs
+    // Expire old daydream links (fade after ~3 seconds / 180 frames)
+    const DAYDREAM_LIFETIME = 180;
+    state.daydreamLinks = state.daydreamLinks.filter(d => (state.time - (d.birth || 0)) < DAYDREAM_LIFETIME);
     const linkData = state.daydreamLinks;
     const links = daydreamLayer.selectAll('.daydream-link').data(linkData, d => d.id);
 
@@ -2918,7 +2933,11 @@ svg#main-viz {
       })
       .attr('stroke', '#8b5cf6')
       .attr('stroke-width', d => d.hit ? 2 : 0.8)
-      .attr('stroke-opacity', d => d.hit ? 0.5 + Math.sin(state.time * 0.03) * 0.25 : 0.12)
+      .attr('stroke-opacity', d => {
+        const age = state.time - (d.birth || 0);
+        const fade = Math.max(0, 1 - age / DAYDREAM_LIFETIME);
+        return d.hit ? (0.5 + Math.sin(state.time * 0.03) * 0.25) * fade : 0.12 * fade;
+      })
       .attr('stroke-dasharray', d => d.hit ? `${4 + Math.sin(state.time * 0.05) * 2},3` : '3,8')
       .attr('filter', d => d.hit ? 'url(#glow-purple)' : 'none');
 
@@ -2942,7 +2961,11 @@ svg#main-viz {
       })
       .attr('r', d => 4 + Math.sin(state.time * 0.06) * 1.5)
       .attr('fill', '#a78bfa')
-      .attr('opacity', 0.6 + Math.sin(state.time * 0.04) * 0.3)
+      .attr('opacity', d => {
+        const age = state.time - (d.birth || 0);
+        const fade = Math.max(0, 1 - age / DAYDREAM_LIFETIME);
+        return (0.6 + Math.sin(state.time * 0.04) * 0.3) * fade;
+      })
       .attr('filter', 'url(#glow-purple)');
 
     midDots.exit().remove();
@@ -3611,8 +3634,8 @@ svg#main-viz {
       modeRing.remove();
     }
 
-    // Build link data with curve control points
-    const linkData = agents.filter(a => a.parent && state.agents.has(a.parent)).map(a => {
+    // Build link data with curve control points — only for active agents
+    const linkData = agents.filter(a => a.parent && state.agents.has(a.parent) && a.status === 'active').map(a => {
       const source = state.agents.get(a.parent);
       const curve = computeLinkCurve(source, a);
       return {
@@ -3621,20 +3644,17 @@ svg#main-viz {
       };
     });
 
-    // Glow halo behind links (wider, dimmer for atmospheric depth)
+    // Glow halo behind links
     const glowLinks = agentTreeLayer.selectAll('.agent-link-glow').data(linkData, d => d.id + '-glow');
     glowLinks.enter().append('path').attr('class', 'agent-link-glow')
       .attr('fill', 'none')
       .merge(glowLinks)
       .attr('d', d => `M${d.source.x},${d.source.y} Q${d.cpx},${d.cpy} ${d.target.x},${d.target.y}`)
-      .attr('stroke', d => {
-        const active = d.target.status === 'active';
-        return active ? 'rgba(180,195,220,0.1)' : 'rgba(160,175,200,0.03)';
-      })
+      .attr('stroke', 'rgba(180,195,220,0.08)')
       .attr('stroke-width', 8);
-    glowLinks.exit().remove();
+    glowLinks.exit().transition().duration(800).attr('stroke-opacity', 0).remove();
 
-    // Curved path links (tendrils) — neutral color, hierarchy not goal
+    // Curved path links — only visible when data flows (agent active)
     const links = agentTreeLayer.selectAll('.agent-link-path').data(linkData, d => d.id);
     links.enter().append('path').attr('class', 'agent-link-path')
       .style('cursor', 'pointer')
@@ -3656,13 +3676,10 @@ svg#main-viz {
       })
       .merge(links)
       .attr('d', d => `M${d.source.x},${d.source.y} Q${d.cpx},${d.cpy} ${d.target.x},${d.target.y}`)
-      .attr('stroke', d => {
-        const active = d.target.status === 'active';
-        return active ? 'rgba(200,215,235,0.45)' : 'rgba(180,195,220,0.18)';
-      })
-      .attr('stroke-width', d => d.target.status === 'active' ? 2 : 1.2)
-      .attr('stroke-dasharray', d => d.target.status === 'done' ? 'none' : '6,4');
-    links.exit().remove();
+      .attr('stroke', 'rgba(200,215,235,0.4)')
+      .attr('stroke-width', 1.8)
+      .attr('stroke-dasharray', '6,4');
+    links.exit().transition().duration(800).attr('stroke-opacity', 0).remove();
 
     // Data particles flowing along curved links
     updateDataParticles(linkData);
@@ -3818,9 +3835,9 @@ svg#main-viz {
 
     nodeGroups.exit().transition().duration(500).attr('opacity', 0).remove();
 
-    // Goal tendrils — connect agents to their goal colonies with visible energy flow
+    // Goal tendrils — only visible when agent is actively working on the goal
     const goalTendrilData = agents
-      .filter(a => a.goalId && state.colonies.has(a.goalId))
+      .filter(a => a.goalId && state.colonies.has(a.goalId) && a.status === 'active')
       .map(a => {
         const colony = state.colonies.get(a.goalId);
         return {
@@ -3847,7 +3864,7 @@ svg#main-viz {
       })
       .attr('stroke', d => PALETTE[d.colorKey] ? PALETTE[d.colorKey].glow + '0.06)' : 'rgba(255,255,255,0.03)')
       .attr('stroke-width', 6);
-    goalGlows.exit().remove();
+    goalGlows.exit().transition().duration(1000).attr('stroke-opacity', 0).remove();
 
     // Visible tendril paths with animated dash flow
     const goalTendrils = agentTreeLayer.selectAll('.goal-tendril').data(goalTendrilData, d => d.id);
@@ -3880,14 +3897,13 @@ svg#main-viz {
         return `M${ax},${ay} Q${cpx},${cpy} ${gx},${gy}`;
       })
       .attr('stroke', d => {
-        const active = d.agent.status === 'active';
         const pal = PALETTE[d.colorKey];
-        return pal ? pal.glow + (active ? '0.35)' : '0.18)') : 'rgba(255,255,255,0.12)';
+        return pal ? pal.glow + '0.3)' : 'rgba(255,255,255,0.12)';
       })
-      .attr('stroke-width', d => d.agent.status === 'active' ? 1.8 : 1)
+      .attr('stroke-width', 1.5)
       .attr('stroke-dasharray', '8,12')
       .attr('stroke-dashoffset', -state.time * 0.5);
-    goalTendrils.exit().remove();
+    goalTendrils.exit().transition().duration(1000).attr('stroke-opacity', 0).remove();
 
     // Current task label — subtle text below agent tree showing what's happening
     const taskText = state.activeTask ? state.activeTask.name || '' : '';
@@ -4531,6 +4547,7 @@ svg#main-viz {
         target: targetP,
         hit: link.hit || false,
         opportunity: link.opportunity || false,
+        birth: state.time,
       });
     });
 
@@ -4745,7 +4762,7 @@ svg#main-viz {
       colony.radius = Math.min(160, 60 + colony.particles.length * 1.5);
     });
 
-    // Seed daydream links
+    // Seed daydream links — stagger birth times so they don't all expire at once
     const colonyArr = Array.from(state.colonies.values());
     for (let i = 0; i < 6; i++) {
       const ci = Math.floor(Math.random() * colonyArr.length);
@@ -4762,6 +4779,7 @@ svg#main-viz {
         target: tp,
         hit: Math.random() > 0.5,
         opportunity: Math.random() > 0.6,
+        birth: state.time - i * 25,
       });
     }
 

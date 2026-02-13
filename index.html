@@ -2660,10 +2660,14 @@ svg#main-viz {
       .on('mouseenter', function(event, d) {
         const tooltip = document.getElementById('tooltip');
         tooltip.querySelector('.tt-message').textContent = d.goal.name || d.id;
-        const progress = d.goal.progress ? d.goal.progress + '% progress' : '';
-        const commits = d.particles.length + ' commits';
+        const recent = d.particles.filter(p => p.age < 7).length;
+        const momentum = recent > 5 ? 'high momentum' : recent > 0 ? recent + ' commits this week' : 'no recent activity';
+        const total = d.particles.length + ' total commits';
         const status = d.active ? 'ACTIVE' : 'idle';
-        tooltip.querySelector('.tt-meta').textContent = [status, progress, commits].filter(Boolean).join(' \u2022 ');
+        tooltip.querySelector('.tt-meta').textContent = [status, momentum, total].filter(Boolean).join(' \u2022 ');
+        tooltip.querySelector('.tt-stat.add').textContent = '';
+        tooltip.querySelector('.tt-stat.del').textContent = '';
+        tooltip.querySelector('.tt-stat.files').textContent = '';
         tooltip.style.left = event.clientX + 12 + 'px';
         tooltip.style.top = event.clientY - 10 + 'px';
         tooltip.classList.add('visible');
@@ -2682,35 +2686,39 @@ svg#main-viz {
 
     colonyHalos.exit().remove();
 
-    // Goal progress arcs — thin arc around colony showing completion %
-    const progressData = colonyData.filter(d => d.goal.progress > 0);
-    const progressArcs = coloniesLayer.selectAll('.colony-progress-arc').data(progressData, d => d.id);
+    // Momentum arcs — shows recent activity intensity (commits in last 7d) not fixed progress
+    const momentumData = colonyData.filter(d => d.particles.length > 0);
+    const momentumArcs = coloniesLayer.selectAll('.colony-momentum-arc').data(momentumData, d => d.id);
 
-    progressArcs.enter()
+    momentumArcs.enter()
       .append('path')
-      .attr('class', 'colony-progress-arc')
+      .attr('class', 'colony-momentum-arc')
       .attr('fill', 'none')
-      .merge(progressArcs)
+      .merge(momentumArcs)
       .attr('d', d => {
         const r = d.radius + 24;
-        const pct = Math.min(1, (d.goal.progress || 0) / 100);
-        const endAngle = -Math.PI / 2 + pct * Math.PI * 2;
+        const recent = d.particles.filter(p => p.age < 7).length;
+        // Momentum: ratio of recent commits to total, capped at 1
+        // More recent = more momentum (full ring = all commits are fresh)
+        const momentum = Math.min(1, recent / Math.max(1, d.particles.length * 0.5));
+        const endAngle = -Math.PI / 2 + momentum * Math.PI * 2;
         const startAngle = -Math.PI / 2;
         const x1 = d.cx + Math.cos(startAngle) * r;
         const y1 = d.cy + Math.sin(startAngle) * r;
         const x2 = d.cx + Math.cos(endAngle) * r;
         const y2 = d.cy + Math.sin(endAngle) * r;
-        const large = pct > 0.5 ? 1 : 0;
-        return pct >= 1
+        const large = momentum > 0.5 ? 1 : 0;
+        if (momentum < 0.02) return ''; // too small to draw
+        return momentum >= 1
           ? `M${x1},${y1} A${r},${r} 0 1,1 ${x1 - 0.01},${y1}`
           : `M${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2}`;
       })
       .attr('stroke', d => d.color.base)
       .attr('stroke-width', 2)
-      .attr('stroke-opacity', d => d.active ? 0.5 : 0.25)
+      .attr('stroke-opacity', d => d.active ? 0.45 : 0.2)
       .attr('stroke-linecap', 'round');
 
-    progressArcs.exit().remove();
+    momentumArcs.exit().remove();
 
     // Stalled goal indicators — dashed amber ring when no recent commits
     const stalledData = colonyData.filter(d => {

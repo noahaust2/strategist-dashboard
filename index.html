@@ -2541,7 +2541,8 @@ svg#main-viz {
       })
       .on('mouseleave', function() {
         document.getElementById('tooltip').classList.remove('visible');
-      });
+      })
+      .on('click', function(event, d) { openSidebarPanel('raw'); });
 
     entering.append('circle').attr('class', 'doc-ring');
     entering.append('text').attr('class', 'doc-icon');
@@ -2727,12 +2728,15 @@ svg#main-viz {
       .on('mouseleave', function() {
         document.getElementById('tooltip').classList.remove('visible');
       })
+      .on('click', function(event, d) {
+        openSidebarPanel('goals');
+      })
       .merge(colonyHalos)
       .attr('cx', d => d.cx)
       .attr('cy', d => d.cy)
       .attr('r', d => d.radius + 20 + Math.sin(d.breathPhase) * 5)
       .attr('fill', 'none')
-      .attr('stroke', d => d.color.glow + (d.active ? '0.12)' : '0.04)'))
+      .attr('stroke', d => d.color.glow + (d.active ? '0.18)' : '0.08)'))
       .attr('stroke-width', d => d.active ? 1.5 : 0.5)
       .attr('filter', 'none');
 
@@ -2819,15 +2823,19 @@ svg#main-viz {
 
     labelMerged.select('.colony-name')
       .attr('fill', d => d.color.base)
-      .attr('opacity', d => d.active ? 0.35 : 0.15)
-      .attr('font-size', d => Math.max(9, 11 / state.zoom))
+      .attr('opacity', d => d.active ? 0.6 : 0.35)
+      .attr('font-size', d => Math.max(10, 12 / state.zoom))
       .text(d => d.goal.name || d.id);
 
     labelMerged.select('.colony-count')
       .attr('y', 14)
-      .attr('fill', d => d.color.glow + '0.3)')
-      .attr('opacity', d => d.active ? 0.4 : 0.15)
-      .text(d => d.particles.length + (d.active ? ' \u2022' : ''));
+      .attr('fill', d => d.color.glow + '0.4)')
+      .attr('opacity', d => d.active ? 0.5 : 0.25)
+      .text(d => {
+        const recent = d.particles.filter(p => p.age < 7).length;
+        const label = recent > 0 ? `${recent} this week` : `${d.particles.length} total`;
+        return label + (d.active ? ' \u2022 active' : '');
+      });
 
     labels.exit().remove();
 
@@ -3674,7 +3682,8 @@ svg#main-viz {
       .style('cursor', 'pointer')
       .each(d => { d._enterTime = state.time; })
       .on('mouseenter', function(event, d) { showAgentDetail(d, event); })
-      .on('mouseleave', function() { hideAgentDetail(); });
+      .on('mouseleave', function() { hideAgentDetail(); })
+      .on('click', function(event, d) { openSidebarPanel('process'); });
     entering.append('circle').attr('class', 'agent-node-bg');
     entering.append('circle').attr('class', 'agent-node-ring');
     entering.append('text').attr('class', 'agent-node-label');

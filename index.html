@@ -1511,9 +1511,24 @@ svg#main-viz {
   font-size: 12px;
   color: var(--text-secondary);
   line-height: 1.4;
-  max-height: 40px;
+  max-height: 80px;
   overflow: hidden;
+  position: relative;
 }
+
+.mission-thought {
+  transition: opacity 0.8s ease-in-out;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mission-thought.thought-0 { opacity: 1.0; color: var(--text-primary); }
+.mission-thought.thought-1 { opacity: 0.5; color: var(--text-secondary); font-size: 11px; }
+.mission-thought.thought-2 { opacity: 0.25; color: var(--text-muted); font-size: 10px; }
+
+.mission-thought.fading-out { opacity: 0; }
 
 #mission-thinking-time {
   font-size: 10px;
@@ -5251,13 +5266,65 @@ svg#main-viz {
       agentsRow.appendChild(count);
     }
 
-    // Latest thinking
-    if (state.thinkingSteps.length > 0) {
-      const latest = state.thinkingSteps[state.thinkingSteps.length - 1];
-      const thinkText = document.getElementById('mission-thinking-text');
-      const thinkTime = document.getElementById('mission-thinking-time');
-      if (thinkText) thinkText.textContent = latest.text;
-      if (thinkTime) thinkTime.textContent = latest.time || '';
+    // Cycling thinking overlay — show 2-3 thoughts, fade older ones, rotate every 3.5s
+    updateMissionThinking();
+  }
+
+  // Mission thinking cycling state
+  let missionThinkingOffset = 0;
+  let missionThinkingTimer = null;
+
+  function updateMissionThinking() {
+    const steps = state.thinkingSteps;
+    const container = document.getElementById('mission-thinking-text');
+    const timeEl = document.getElementById('mission-thinking-time');
+    if (!container) return;
+
+    if (steps.length === 0) {
+      container.textContent = 'No thinking data yet';
+      if (timeEl) timeEl.textContent = '';
+      return;
+    }
+
+    // Reset offset when new steps arrive (so newest is always visible)
+    missionThinkingOffset = 0;
+    renderMissionThoughts();
+
+    // Restart cycling timer
+    if (missionThinkingTimer) clearInterval(missionThinkingTimer);
+    if (steps.length > 1) {
+      missionThinkingTimer = setInterval(() => {
+        missionThinkingOffset = (missionThinkingOffset + 1) % state.thinkingSteps.length;
+        renderMissionThoughts();
+      }, 3500);
+    }
+  }
+
+  function renderMissionThoughts() {
+    const steps = state.thinkingSteps;
+    const container = document.getElementById('mission-thinking-text');
+    const timeEl = document.getElementById('mission-thinking-time');
+    if (!container || steps.length === 0) return;
+
+    // Show up to 3 thoughts starting from the current offset (newest first)
+    const count = Math.min(3, steps.length);
+    container.innerHTML = '';
+
+    for (let i = 0; i < count; i++) {
+      const idx = steps.length - 1 - ((missionThinkingOffset + i) % steps.length);
+      if (idx < 0) break;
+      const step = steps[idx];
+      const div = document.createElement('div');
+      div.className = 'mission-thought thought-' + i;
+      div.textContent = step.text;
+      div.title = step.text; // full text on hover
+      container.appendChild(div);
+    }
+
+    // Show time of the primary (top) thought
+    const primaryIdx = steps.length - 1 - (missionThinkingOffset % steps.length);
+    if (timeEl && steps[primaryIdx]) {
+      timeEl.textContent = steps[primaryIdx].time || '';
     }
   }
 

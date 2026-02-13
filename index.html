@@ -2460,15 +2460,16 @@ svg#main-viz {
     echoRings.exit().remove();
 
     // Synapse labels at high zoom — show commit message (limit to 15 most recent)
+    const synInvZoom = 1 / Math.max(1, state.zoom);
     if (state.zoom > 3) {
       const recentNodes = nodes.slice().sort((a, b) => a.age - b.age).slice(0, 15);
       const sLabels = synapseTreeLayer.selectAll('.synapse-label').data(recentNodes, d => d.hash);
       sLabels.enter().append('text').attr('class', 'synapse-label')
         .attr('font-family', 'var(--font-mono)')
-        .attr('font-size', 7)
         .attr('pointer-events', 'none')
         .merge(sLabels)
-        .attr('x', d => d.x + 8).attr('y', d => d.y + 3)
+        .attr('font-size', 7 * synInvZoom)
+        .attr('x', d => d.x + 8 * synInvZoom).attr('y', d => d.y + 3)
         .attr('fill', d => {
           const c = SYNAPSE_COLORS[d.type] || SYNAPSE_COLORS.other;
           return c.glow + '0.5)';
@@ -2807,14 +2808,16 @@ svg#main-viz {
 
     labelMerged.attr('transform', d => `translate(${d.cx},${d.cy + d.radius + 30})`);
 
+    const colonyInvZoom = 1 / Math.max(0.5, state.zoom);
     labelMerged.select('.colony-name')
       .attr('fill', d => d.color.base)
       .attr('opacity', d => d.active ? 0.6 : 0.35)
-      .attr('font-size', d => Math.max(10, 12 / state.zoom))
+      .attr('font-size', 12 * colonyInvZoom)
       .text(d => d.goal.name || d.id);
 
     labelMerged.select('.colony-count')
-      .attr('y', 14)
+      .attr('y', 14 * colonyInvZoom)
+      .attr('font-size', 9 * colonyInvZoom)
       .attr('fill', d => d.color.glow + '0.4)')
       .attr('opacity', d => d.active ? 0.5 : 0.25)
       .text(d => {
@@ -2873,15 +2876,16 @@ svg#main-viz {
       .attr('opacity', state.zoom > 1.5 ? 0.7 : 0);
 
     // Commit message labels at deep zoom — limit to 20 most recent
+    const pInvZoom = 1 / Math.max(1, state.zoom);
     if (state.zoom > 3) {
       const recentParticles = allParticles.slice().sort((a, b) => a.age - b.age).slice(0, 20);
       let pLabels = particlesLayer.selectAll('.particle-label').data(recentParticles, d => d.id);
       pLabels.enter().append('text').attr('class', 'particle-label')
-        .attr('font-size', 8)
         .attr('font-family', 'var(--font-mono)')
         .attr('fill', 'rgba(255,255,255,0.4)')
         .merge(pLabels)
-        .attr('x', d => d.x + d.radius + 4)
+        .attr('font-size', 8 * pInvZoom)
+        .attr('x', d => d.x + d.radius + 4 * pInvZoom)
         .attr('y', d => d.y + 3)
         .text(d => {
           const msg = d.commit.message || '';
@@ -3805,11 +3809,12 @@ svg#main-viz {
         return d.label.slice(0, 10) + '\u2026';
       });
 
-    // Full name below circle — reveals on zoom
+    // Full name below circle — reveals on zoom, inverse-scaled for readability
+    const invZoom = 1 / Math.max(1, state.zoom);
     merged.select('.agent-node-action')
-      .attr('y', d => d.nodeRadius + 16)
+      .attr('y', d => d.nodeRadius + 14 * invZoom)
       .attr('fill', 'var(--text-secondary)')
-      .attr('font-size', 11)
+      .attr('font-size', 11 * invZoom)
       .attr('opacity', state.zoom > 1.5 ? 0.6 : 0)
       .attr('text-anchor', 'middle')
       .text(d => d.label);
@@ -3822,24 +3827,24 @@ svg#main-viz {
     };
     const badgeLen = d => Math.min(30, (badgeText(d) || '').length);
 
-    // Tool badge — only at deep zoom, replaces the full-name label
+    // Tool badge — only at deep zoom, inverse-scaled
     const showTools = state.zoom > 2.5;
     merged.select('.agent-tool-bg')
       .attr('opacity', showTools ? 0.8 : 0)
-      .attr('x', d => -(Math.min(90, badgeLen(d) * 3.5 + 8)))
-      .attr('y', d => d.nodeRadius + 26)
-      .attr('width', d => Math.min(180, badgeLen(d) * 7 + 16))
-      .attr('height', 16)
-      .attr('rx', 4)
+      .attr('x', d => -(Math.min(90, badgeLen(d) * 3.5 + 8)) * invZoom)
+      .attr('y', d => d.nodeRadius + 24 * invZoom)
+      .attr('width', d => Math.min(180, badgeLen(d) * 7 + 16) * invZoom)
+      .attr('height', 14 * invZoom)
+      .attr('rx', 3 * invZoom)
       .attr('fill', d => showTools && badgeText(d) ? 'rgba(34,211,238,0.08)' : 'none')
       .attr('stroke', d => showTools && badgeText(d) ? 'rgba(34,211,238,0.2)' : 'none')
       .attr('stroke-width', 0.5);
 
     merged.select('.agent-node-tool-badge')
       .attr('opacity', showTools ? 0.8 : 0)
-      .attr('y', d => d.nodeRadius + 38)
+      .attr('y', d => d.nodeRadius + 35 * invZoom)
       .attr('fill', 'var(--accent-cyan)')
-      .attr('font-size', 10)
+      .attr('font-size', 10 * invZoom)
       .text(d => {
         const t = badgeText(d);
         return t.length > 28 ? t.slice(0, 26) + '...' : t;
@@ -3957,14 +3962,15 @@ svg#main-viz {
         taskLabel = agentTreeLayer.append('text').attr('class', 'current-task-label')
           .attr('text-anchor', 'middle')
           .attr('font-family', 'var(--font-sans)')
-          .attr('font-size', 11)
           .attr('pointer-events', 'none');
       }
       const root = agents.find(a => !a.parent) || agents[0];
       const maxR = Math.max(...agents.map(a => a.nodeRadius || 20));
+      const taskInvZ = 1 / Math.max(1, state.zoom);
       taskLabel
+        .attr('font-size', 11 * taskInvZ)
         .attr('x', hbCx)
-        .attr('y', root.y + maxR + 50)
+        .attr('y', root.y + maxR + 45 * taskInvZ)
         .attr('fill', 'rgba(255,255,255,0.25)')
         .text(taskText.length > 50 ? taskText.slice(0, 48) + '...' : taskText);
     } else {

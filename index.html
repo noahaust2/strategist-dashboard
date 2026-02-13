@@ -3894,19 +3894,21 @@ svg#main-viz {
                          : 1;
     const breatheScale = 1 + Math.sin(state.time * 0.04 * modeBreatheMul) * 0.06;
 
-    // Reasoning depth: more reasoning steps = larger, brighter glow halo
+    // Reasoning depth: more reasoning steps = dramatically larger, brighter glow halo
     merged.select('.agent-node-bg')
       .attr('r', d => {
         const reasons = (d.reasoning || []).length;
-        const depthBoost = Math.min(12, reasons * 2.5); // up to 12px extra radius
-        const base = d.nodeRadius + 8 + depthBoost;
-        return d.status === 'active' ? base * breatheScale : base * 0.9;
+        const depthBoost = Math.min(30, reasons * 6); // up to 30px extra radius
+        const base = d.nodeRadius + 6 + depthBoost;
+        return d.status === 'active' ? base * breatheScale : base * 0.85;
       })
       .attr('fill', d => {
         const reasons = (d.reasoning || []).length;
-        const depthGlow = Math.min(0.06, reasons * 0.012); // deeper = brighter
-        const intensity = d.status === 'active' ? 0.06 + depthGlow : 0.02;
-        return `rgba(200,210,230,${intensity})`;
+        const depthGlow = Math.min(0.14, reasons * 0.028);
+        const intensity = d.status === 'active' ? 0.04 + depthGlow : 0.02;
+        // Tint toward violet when reasoning is deep
+        const violet = Math.min(40, reasons * 8);
+        return `rgba(${200 - violet},${210 - violet},${230 + Math.min(20, violet / 2)},${intensity})`;
       })
       .attr('filter', d => d.status === 'active' ? 'url(#glow-blue)' : 'none');
 
@@ -4035,25 +4037,25 @@ svg#main-viz {
         .attr('opacity', d.status === 'active' ? 0.7 : 0.3);
       toolDots.exit().remove();
 
-      // Inner orbit: reasoning dots (violet, smaller, orbit opposite direction)
+      // Inner orbit: reasoning dots (violet, orbit opposite direction — larger = more visible)
       const reasonItems = showInner ? reasons.slice(-8) : [];
       const rDots = g.selectAll('.reason-dot').data(reasonItems, (r, i) => d.id + '-rd-' + i);
       const rEnter = rDots.enter().append('circle').attr('class', 'reason-dot')
-        .attr('r', 1).attr('fill', 'rgba(167,139,250,0.7)').attr('pointer-events', 'none');
+        .attr('r', 2).attr('fill', 'rgba(167,139,250,0.8)').attr('pointer-events', 'none');
       rEnter.merge(rDots)
         .attr('cx', (r, i) => {
-          const orbitR = d.nodeRadius * 0.32;
-          const angle = (i / Math.max(reasonItems.length, 1)) * Math.PI * 2 - state.time * 0.015;
+          const orbitR = d.nodeRadius * 0.38;
+          const angle = (i / Math.max(reasonItems.length, 1)) * Math.PI * 2 - state.time * 0.05;
           return Math.cos(angle) * orbitR;
         })
         .attr('cy', (r, i) => {
-          const orbitR = d.nodeRadius * 0.32;
-          const angle = (i / Math.max(reasonItems.length, 1)) * Math.PI * 2 - state.time * 0.015;
+          const orbitR = d.nodeRadius * 0.38;
+          const angle = (i / Math.max(reasonItems.length, 1)) * Math.PI * 2 - state.time * 0.05;
           return Math.sin(angle) * orbitR;
         })
-        .attr('r', r => r.status === 'active' ? 1.5 : 1)
-        .attr('fill', r => r.status === 'active' ? 'rgba(167,139,250,0.9)' : 'rgba(167,139,250,0.5)')
-        .attr('opacity', d.status === 'active' ? 0.8 : 0.3);
+        .attr('r', r => r.status === 'active' ? 3 : 2)
+        .attr('fill', r => r.status === 'active' ? 'rgba(167,139,250,0.95)' : 'rgba(167,139,250,0.65)')
+        .attr('opacity', d.status === 'active' ? 0.9 : 0.35);
       rDots.exit().remove();
     });
 

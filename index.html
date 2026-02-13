@@ -1873,6 +1873,15 @@ svg#main-viz {
     bgCtx.fillStyle = grad2;
     bgCtx.fillRect(0, 0, w, h);
 
+    // Subtle concentric rings for spatial depth (radar-like)
+    bgCtx.strokeStyle = `rgba(${nebula.r},${nebula.g},${nebula.b},0.015)`;
+    bgCtx.lineWidth = 0.5;
+    for (let r = 80; r < Math.max(w, h); r += 120) {
+      bgCtx.beginPath();
+      bgCtx.arc(cx, cy, r, 0, Math.PI * 2);
+      bgCtx.stroke();
+    }
+
     // Stars — brightness modulated by health mood
     for (const star of bgStars) {
       const flicker = Math.sin(t * star.speed * mood.pulseSpeed + star.phase) * 0.15 + star.alpha;
@@ -2433,15 +2442,15 @@ svg#main-viz {
 
     labelMerged.select('.colony-name')
       .attr('fill', d => d.color.base)
-      .attr('opacity', d => d.active ? 0.6 : 0.35)
-      .attr('font-size', d => Math.max(10, 12 / state.zoom))
+      .attr('opacity', d => d.active ? 0.35 : 0.15)
+      .attr('font-size', d => Math.max(9, 11 / state.zoom))
       .text(d => d.goal.name || d.id);
 
     labelMerged.select('.colony-count')
       .attr('y', 14)
-      .attr('fill', d => d.color.glow + '0.5)')
-      .attr('opacity', d => d.active ? 0.7 : 0.35)
-      .text(d => d.particles.length + ' commits' + (d.active ? ' \u2022 ACTIVE' : ''));
+      .attr('fill', d => d.color.glow + '0.3)')
+      .attr('opacity', d => d.active ? 0.4 : 0.15)
+      .text(d => d.particles.length + (d.active ? ' \u2022' : ''));
 
     labels.exit().remove();
 
@@ -3080,6 +3089,38 @@ svg#main-viz {
 
     layoutAgentTree();
 
+    // System health heartbeat ring — pulsing radar emanating from center
+    const hbCx = state._treeCx || state.width / 2;
+    const hbCy = state._treeCy || state.height / 2;
+    const hbSpeed = state.health === 'green' ? 0.02 : state.health === 'yellow' ? 0.04 : 0.07;
+    const hbPhase = (state.time * hbSpeed) % 1;
+    const hbMaxR = Math.min(state.width, state.height) * 0.25;
+    const hbColor = state.health === 'green' ? '52,211,153' : state.health === 'yellow' ? '234,179,8' : '239,68,68';
+
+    let hbRing = agentTreeLayer.select('.health-heartbeat');
+    if (hbRing.empty()) {
+      hbRing = agentTreeLayer.append('circle').attr('class', 'health-heartbeat')
+        .attr('fill', 'none').attr('stroke-width', 1);
+    }
+    hbRing
+      .attr('cx', hbCx).attr('cy', hbCy)
+      .attr('r', 40 + hbPhase * hbMaxR)
+      .attr('stroke', `rgba(${hbColor},${0.15 * (1 - hbPhase)})`)
+      .attr('stroke-width', 1.5 * (1 - hbPhase));
+
+    // Second ring offset for depth
+    let hbRing2 = agentTreeLayer.select('.health-heartbeat-2');
+    if (hbRing2.empty()) {
+      hbRing2 = agentTreeLayer.append('circle').attr('class', 'health-heartbeat-2')
+        .attr('fill', 'none');
+    }
+    const hbPhase2 = ((state.time * hbSpeed) + 0.5) % 1;
+    hbRing2
+      .attr('cx', hbCx).attr('cy', hbCy)
+      .attr('r', 40 + hbPhase2 * hbMaxR)
+      .attr('stroke', `rgba(${hbColor},${0.08 * (1 - hbPhase2)})`)
+      .attr('stroke-width', 1 * (1 - hbPhase2));
+
     // Build link data with curve control points
     const linkData = agents.filter(a => a.parent && state.agents.has(a.parent)).map(a => {
       const source = state.agents.get(a.parent);
@@ -3090,6 +3131,20 @@ svg#main-viz {
       };
     });
 
+    // Glow halo behind links (wider, dimmer for atmospheric depth)
+    const glowLinks = agentTreeLayer.selectAll('.agent-link-glow').data(linkData, d => d.id + '-glow');
+    glowLinks.enter().append('path').attr('class', 'agent-link-glow')
+      .attr('fill', 'none')
+      .merge(glowLinks)
+      .attr('d', d => `M${d.source.x},${d.source.y} Q${d.cpx},${d.cpy} ${d.target.x},${d.target.y}`)
+      .attr('stroke', d => {
+        const ck = AGENT_COLORS[agents.indexOf(d.target) % AGENT_COLORS.length];
+        const active = d.target.status === 'active';
+        return PALETTE[ck].glow + (active ? '0.12)' : '0.04)');
+      })
+      .attr('stroke-width', 8);
+    glowLinks.exit().remove();
+
     // Curved path links (tendrils)
     const links = agentTreeLayer.selectAll('.agent-link-path').data(linkData, d => d.id);
     links.enter().append('path').attr('class', 'agent-link-path')
@@ -3097,8 +3152,10 @@ svg#main-viz {
       .attr('d', d => `M${d.source.x},${d.source.y} Q${d.cpx},${d.cpy} ${d.target.x},${d.target.y}`)
       .attr('stroke', d => {
         const ck = AGENT_COLORS[agents.indexOf(d.target) % AGENT_COLORS.length];
-        return PALETTE[ck].glow + '0.4)';
+        const active = d.target.status === 'active';
+        return PALETTE[ck].glow + (active ? '0.5)' : '0.2)');
       })
+      .attr('stroke-width', d => d.target.status === 'active' ? 2.5 : 1.5)
       .attr('stroke-dasharray', d => d.target.status === 'done' ? 'none' : '6,4');
     links.exit().remove();
 
@@ -3106,21 +3163,27 @@ svg#main-viz {
     updateDataParticles(linkData);
     const dpData = state.dataParticles;
     const dps = agentTreeLayer.selectAll('.agent-data-particle').data(dpData, d => d.id);
-    dps.enter().append('circle').attr('class', 'agent-data-particle').attr('r', 3.5)
+    // Particle glow halos (larger, dimmer circle behind each particle)
+    const dpGlows = agentTreeLayer.selectAll('.agent-particle-glow').data(dpData, d => d.id + '-glow');
+    dpGlows.enter().append('circle').attr('class', 'agent-particle-glow').attr('r', 8)
+      .merge(dpGlows)
+      .attr('cx', d => bezierPoint(d.source.x, d.source.y, d.cpx, d.cpy, d.target.x, d.target.y, d.t).x)
+      .attr('cy', d => bezierPoint(d.source.x, d.source.y, d.cpx, d.cpy, d.target.x, d.target.y, d.t).y)
+      .attr('fill', d => {
+        const ck = AGENT_COLORS[agents.indexOf(d.target) % AGENT_COLORS.length];
+        return PALETTE[ck] ? PALETTE[ck].glow + '0.15)' : 'rgba(74,158,255,0.15)';
+      });
+    dpGlows.exit().remove();
+
+    dps.enter().append('circle').attr('class', 'agent-data-particle').attr('r', 3)
       .merge(dps)
-      .attr('cx', d => {
-        const pt = bezierPoint(d.source.x, d.source.y, d.cpx, d.cpy, d.target.x, d.target.y, d.t);
-        return pt.x;
-      })
-      .attr('cy', d => {
-        const pt = bezierPoint(d.source.x, d.source.y, d.cpx, d.cpy, d.target.x, d.target.y, d.t);
-        return pt.y;
-      })
+      .attr('cx', d => bezierPoint(d.source.x, d.source.y, d.cpx, d.cpy, d.target.x, d.target.y, d.t).x)
+      .attr('cy', d => bezierPoint(d.source.x, d.source.y, d.cpx, d.cpy, d.target.x, d.target.y, d.t).y)
       .attr('fill', d => {
         const ck = AGENT_COLORS[agents.indexOf(d.target) % AGENT_COLORS.length];
         return PALETTE[ck] ? PALETTE[ck].base : '#4a9eff';
       })
-      .attr('opacity', d => 0.6 + Math.sin(d.t * Math.PI) * 0.4);
+      .attr('opacity', d => 0.7 + Math.sin(d.t * Math.PI) * 0.3);
     dps.exit().remove();
 
     // Agent nodes

@@ -1420,43 +1420,43 @@ svg#main-viz {
   <div id="guide-content">
     <h1>Autonomous Agent Dashboard</h1>
     <div class="guide-subtitle">
-      This dashboard shows your AI agent system in real-time. Here's how to read it:
+      Real-time visualization of your AI agent system. Hover anything for details. Scroll to zoom.
     </div>
     <div class="guide-areas">
       <div class="guide-area">
         <div class="guide-area-number" style="background:rgba(34,211,238,0.15);color:var(--accent-cyan);">1</div>
-        <div class="guide-area-title">Mission Status (top-left)</div>
+        <div class="guide-area-title">Canvas Atmosphere</div>
         <div class="guide-area-desc">
-          The agent's current <strong>phase</strong> (READ/DECIDE/EXEC/VERIFY),
-          what <strong>task</strong> it's working on, and how many
-          <strong>sub-agents</strong> are active. Start here to know what's happening right now.
+          The <strong>background color</strong> shows the current phase. <strong>Brightness</strong>
+          reflects growth — vibrant means learning, dim means stalled.
+          A <strong>pulsing ring</strong> shows the system heartbeat.
         </div>
       </div>
       <div class="guide-area">
         <div class="guide-area-number" style="background:rgba(74,158,255,0.15);color:var(--accent-blue);">2</div>
-        <div class="guide-area-title">Agent Tree (center)</div>
+        <div class="guide-area-title">Agent Nodes (center)</div>
         <div class="guide-area-desc">
-          The <strong>Strategist</strong> is the large center node. It delegates to
-          <strong>teammates</strong> (medium nodes) who may spawn <strong>sub-agents</strong>
-          (small nodes). Animated dots show data flowing between them.
+          <strong>Breathing nodes</strong> = active agents. Size = hierarchy.
+          <strong>Coral branches</strong> = knowledge learned.
+          <strong>Orbiting letters</strong> = planning documents. Zoom in for details.
         </div>
       </div>
       <div class="guide-area">
-        <div class="guide-area-number" style="background:rgba(167,139,250,0.15);color:var(--accent-violet);">3</div>
-        <div class="guide-area-title">Decision Flow (bottom-right)</div>
-        <div class="guide-area-desc">
-          A live feed of the agent's <strong>reasoning</strong>. Each step is tagged
-          with its phase (READ/DECIDE/EXEC/VERIFY) so you can see
-          <strong>how</strong> it's making decisions.
-        </div>
-      </div>
-      <div class="guide-area">
-        <div class="guide-area-number" style="background:rgba(52,211,153,0.15);color:var(--accent-green);">4</div>
+        <div class="guide-area-number" style="background:rgba(52,211,153,0.15);color:var(--accent-green);">3</div>
         <div class="guide-area-title">Goal Clusters (outer ring)</div>
         <div class="guide-area-desc">
-          Each cluster of particles is a <strong>goal</strong> (Revenue, Audience, etc).
-          Each particle is a <strong>git commit</strong>. Larger/brighter clusters have
-          more recent activity. The active goal glows brighter.
+          Each particle cluster is a <strong>goal</strong>. Particles = commits.
+          <strong>Colored arcs</strong> = momentum. <strong>Dashed amber ring</strong> = stalled.
+          <strong>Purple lightning</strong> = daydream connections between goals.
+        </div>
+      </div>
+      <div class="guide-area">
+        <div class="guide-area-number" style="background:rgba(167,139,250,0.15);color:var(--accent-violet);">4</div>
+        <div class="guide-area-title">HUD Bar (top center)</div>
+        <div class="guide-area-desc">
+          <strong>Dot</strong> = health. <strong>Steps</strong> = loop phase.
+          <strong>Bar</strong> = context window. <strong>Sparkline</strong> = growth trend.
+          Hover the HUD to see more details. Click sidebar tabs on the right.
         </div>
       </div>
     </div>
@@ -3363,9 +3363,13 @@ svg#main-viz {
       agents.forEach((a, i) => {
         const angle = (2 * Math.PI * i) / agents.length - Math.PI / 2;
         const radius = Math.min(state.width, state.height) * 0.15;
-        a.x = cx + Math.cos(angle) * radius;
-        a.y = cy + Math.sin(angle) * radius;
-        a.nodeRadius = a.nodeRadius || (i === 0 ? 40 : 28);
+        const baseSize = i === 0 ? 40 : 28;
+        const tokenBoost = a.tokens ? Math.min(12, Math.sqrt(a.tokens.total / 10000) * 3) : 0;
+        a.nodeRadius = baseSize + tokenBoost;
+        a._baseX = cx + Math.cos(angle) * radius;
+        a._baseY = cy + Math.sin(angle) * radius;
+        a.x = a.x + (a._baseX - a.x) * 0.08;
+        a.y = a.y + (a._baseY - a.y) * 0.08;
       });
       return;
     }
@@ -3400,16 +3404,51 @@ svg#main-viz {
       agent._angle = node.x;   // radians
       agent._radius = node.y;  // distance from center
 
+      // Base size from hierarchy, boosted by token usage (more work = bigger)
+      const baseSize = node.depth === 0 ? 40 : node.depth === 1 ? 28 : node.depth === 2 ? 20 : 16;
+      const tokenBoost = agent.tokens ? Math.min(12, Math.sqrt(agent.tokens.total / 10000) * 3) : 0;
+      agent.nodeRadius = baseSize + tokenBoost;
+
       if (node.depth === 0) {
-        agent.x = cx;
-        agent.y = cy;
-        agent.nodeRadius = 40;
+        agent._baseX = cx;
+        agent._baseY = cy;
       } else {
         // Polar to cartesian (angle 0 = top, clockwise)
-        agent.x = cx + node.y * Math.sin(node.x);
-        agent.y = cy - node.y * Math.cos(node.x);
-        agent.nodeRadius = node.depth === 1 ? 28 : node.depth === 2 ? 20 : 16;
+        agent._baseX = cx + node.y * Math.sin(node.x);
+        agent._baseY = cy - node.y * Math.cos(node.x);
       }
+    });
+
+    // Motion: drift agents toward their active goal colony
+    agents.forEach(a => {
+      let targetX = a._baseX, targetY = a._baseY;
+
+      if (a.goalId && state.colonies.has(a.goalId)) {
+        const colony = state.colonies.get(a.goalId);
+        // Pull 15% toward goal colony when active, 5% when idle
+        const pull = a.status === 'active' ? 0.15 : 0.05;
+        targetX = a._baseX + (colony.cx - a._baseX) * pull;
+        targetY = a._baseY + (colony.cy - a._baseY) * pull;
+      }
+
+      // Motion encoding by mode:
+      if (a.status === 'active' && state.agentMode !== 'stagnating') {
+        // Active: smooth gentle oscillation (working)
+        const jx = Math.sin(state.time * 0.03 + a._baseX * 0.1) * 3;
+        const jy = Math.cos(state.time * 0.025 + a._baseY * 0.1) * 3;
+        targetX += jx;
+        targetY += jy;
+      } else if (state.agentMode === 'stagnating') {
+        // Stagnating: high-frequency nervous jitter (stuck)
+        const jx = (Math.random() - 0.5) * 1.5;
+        const jy = (Math.random() - 0.5) * 1.5;
+        targetX += jx;
+        targetY += jy;
+      }
+
+      // Smooth interpolation toward target (prevents jumping)
+      a.x = a.x + (targetX - a.x) * 0.08;
+      a.y = a.y + (targetY - a.y) * 0.08;
     });
   }
 

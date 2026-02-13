@@ -2488,11 +2488,15 @@ svg#main-viz {
     const orbitRadius = Math.min(state.width, state.height) * 0.14;
     const docData = docKeys.map((name, i) => {
       const d = docs[name];
-      const angle = (2 * Math.PI * i) / docKeys.length - Math.PI / 2;
-      // Freshness: 0 (just modified) to 1 (very stale, >7 days)
+      // Freshness: 0 (stale) to 1 (just modified)
       const mtime = d.mtime ? new Date(d.mtime).getTime() : now - 86400000 * 7;
       const hoursAgo = (now - mtime) / 3600000;
       const freshness = Math.max(0, Math.min(1, 1 - hoursAgo / 168));
+
+      // Orbit speed: fresh docs orbit faster (recently touched = active)
+      const baseAngle = (2 * Math.PI * i) / docKeys.length - Math.PI / 2;
+      const orbitSpeed = 0.0002 + freshness * 0.001; // fresh = faster orbit
+      const angle = baseAngle + state.time * orbitSpeed;
 
       return {
         name,
@@ -3858,6 +3862,28 @@ svg#main-viz {
       .attr('stroke-dasharray', '8,12')
       .attr('stroke-dashoffset', -state.time * 0.5);
     goalTendrils.exit().remove();
+
+    // Current task label — subtle text below agent tree showing what's happening
+    const taskText = state.activeTask ? state.activeTask.name || '' : '';
+    let taskLabel = agentTreeLayer.select('.current-task-label');
+    if (taskText && agents.length > 0) {
+      if (taskLabel.empty()) {
+        taskLabel = agentTreeLayer.append('text').attr('class', 'current-task-label')
+          .attr('text-anchor', 'middle')
+          .attr('font-family', 'var(--font-sans)')
+          .attr('font-size', 11)
+          .attr('pointer-events', 'none');
+      }
+      const root = agents.find(a => !a.parent) || agents[0];
+      const maxR = Math.max(...agents.map(a => a.nodeRadius || 20));
+      taskLabel
+        .attr('x', hbCx)
+        .attr('y', root.y + maxR + 50)
+        .attr('fill', 'rgba(255,255,255,0.25)')
+        .text(taskText.length > 50 ? taskText.slice(0, 48) + '...' : taskText);
+    } else {
+      taskLabel.remove();
+    }
   }
 
   function updateDataParticles(linkData) {

@@ -1292,7 +1292,19 @@ svg#main-viz {
 
 /* ── Persistent Legend ─────────────────────────────────── */
 #legend {
-  display: none;
+  display: flex;
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  gap: 12px;
+  padding: 6px 14px;
+  background: rgba(10,12,18,0.7);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  z-index: 50;
+  pointer-events: auto;
 }
 
 .legend-group {

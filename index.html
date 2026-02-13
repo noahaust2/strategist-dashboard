@@ -970,7 +970,7 @@ svg#main-viz {
 #agent-detail {
   position: fixed;
   z-index: 300;
-  width: 260px;
+  width: 320px;
   max-height: 70vh;
   overflow-y: auto;
   background: rgba(10, 10, 15, 0.94);
@@ -1039,7 +1039,7 @@ svg#main-viz {
 /* Zoomed-in detail sections */
 #agent-detail-timeline,
 #agent-detail-reasoning {
-  display: none;
+  display: block;
 }
 
 #agent-detail.zoomed-in #agent-detail-timeline,
@@ -3194,6 +3194,12 @@ svg#main-viz {
       .on('mousemove', function(event, d) { moveTooltip(event); })
       .on('mouseleave', function() { hideTooltip(); });
 
+    // Invisible hit area (larger than visual circle for easier hover)
+    entering.append('circle')
+      .attr('class', 'p-hit')
+      .attr('fill', 'transparent')
+      .attr('stroke', 'none');
+
     // Main circle
     entering.append('circle')
       .attr('class', 'p-body');
@@ -3205,6 +3211,10 @@ svg#main-viz {
     const merged = entering.merge(pGroups);
 
     merged.attr('transform', d => `translate(${d.x},${d.y})`);
+
+    // Hit area — minimum 12px radius for hover target
+    merged.select('.p-hit')
+      .attr('r', d => Math.max(12, d.radius + 6));
 
     merged.select('.p-body')
       .attr('r', d => d.radius)
@@ -4020,7 +4030,7 @@ svg#main-viz {
     let hbRing = agentTreeLayer.select('.health-heartbeat');
     if (hbRing.empty()) {
       hbRing = agentTreeLayer.append('circle').attr('class', 'health-heartbeat')
-        .attr('fill', 'none');
+        .attr('fill', 'none').style('pointer-events', 'none');
     }
     hbRing
       .attr('cx', hbCx).attr('cy', hbCy)
@@ -4045,7 +4055,7 @@ svg#main-viz {
       let evoPulse = agentTreeLayer.select('.evo-pulse');
       if (evoPulse.empty()) {
         evoPulse = agentTreeLayer.append('path').attr('class', 'evo-pulse')
-          .attr('fill', 'none');
+          .attr('fill', 'none').style('pointer-events', 'none');
       }
       // Diamond shape: rotated square
       evoPulse
@@ -4061,7 +4071,7 @@ svg#main-viz {
     if (state.agentMode === 'rate_limited' || state.agentMode === 'rest') {
       if (modeRing.empty()) {
         modeRing = agentTreeLayer.append('circle').attr('class', 'mode-indicator-ring')
-          .attr('fill', 'none');
+          .attr('fill', 'none').style('pointer-events', 'none');
       }
       const modeColor = state.agentMode === 'rate_limited' ? '234,179,8' : '100,100,140';
       const modeAlpha = 0.15 + Math.sin(state.time * 0.02) * 0.05;
@@ -4089,7 +4099,7 @@ svg#main-viz {
     // Glow halo behind links
     const glowLinks = agentTreeLayer.selectAll('.agent-link-glow').data(linkData, d => d.id + '-glow');
     glowLinks.enter().append('path').attr('class', 'agent-link-glow')
-      .attr('fill', 'none')
+      .attr('fill', 'none').style('pointer-events', 'none')
       .merge(glowLinks)
       .attr('d', d => `M${d.source.x},${d.source.y} Q${d.cpx},${d.cpy} ${d.target.x},${d.target.y}`)
       .attr('stroke', 'rgba(180,195,220,0.08)')
@@ -4498,11 +4508,11 @@ svg#main-viz {
       ? `${(tok.total / 1000).toFixed(1)}K tokens (${(tok.input / 1000).toFixed(1)}K in / ${(tok.output / 1000).toFixed(1)}K out)`
       : '';
 
-    // Zoomed-in: toggle enhanced detail sections
+    // Always populate timeline and reasoning
+    populateAgentTimeline(agent);
+    populateAgentReasoning(agent);
     if (isZoomedIn) {
       det.classList.add('zoomed-in');
-      populateAgentTimeline(agent);
-      populateAgentReasoning(agent);
     } else {
       det.classList.remove('zoomed-in');
     }
@@ -4512,7 +4522,7 @@ svg#main-viz {
     const transform = d3.zoomTransform(d3.select('#main-viz').node());
     const screenX = transform.applyX(agent.x) + rect.left;
     const screenY = transform.applyY(agent.y) + rect.top;
-    const panelWidth = isZoomedIn ? 350 : 270;
+    const panelWidth = isZoomedIn ? 350 : 330;
 
     let left = screenX + agent.nodeRadius * transform.k + 16;
     let top = screenY - 40;
@@ -4567,7 +4577,13 @@ svg#main-viz {
     let steps;
 
     if (agentReasoning.length > 0) {
-      steps = agentReasoning.slice(-5);
+      // Server sends reasoning as array of strings (text snippets)
+      steps = agentReasoning.slice(-5).map(s => {
+        if (typeof s === 'string') return { text: s, status: 'done' };
+        return s;
+      });
+      // Mark the last one as active
+      if (steps.length > 0) steps[steps.length - 1].status = 'active';
     } else {
       // Filter global thinking steps that mention this agent
       const nameLower = (agent.label || agent.id).toLowerCase();

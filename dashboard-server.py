@@ -544,6 +544,7 @@ def _parse_session_tail(lines):
         "currentAction": None,
         "lastUserMessage": None,
         "recentTools": [],
+        "reasoning": [],
         "tokens": {"input": 0, "output": 0, "total": 0},
         "model": None,
     }
@@ -588,9 +589,26 @@ def _parse_session_tail(lines):
                     result["currentTool"] = tool_name
                     result["currentAction"] = action
                     result["recentTools"].append(action)
+                elif isinstance(block, dict) and block.get("type") == "thinking":
+                    # Extract thinking blocks (extended thinking / chain of thought)
+                    text = block.get("thinking", "").strip()
+                    if text:
+                        # Take first ~200 chars of each thinking block
+                        snippet = text[:200] + ("..." if len(text) > 200 else "")
+                        result["reasoning"].append(snippet)
+                elif isinstance(block, dict) and block.get("type") == "text":
+                    # Extract assistant text as reasoning context
+                    text = block.get("text", "").strip()
+                    if text and len(text) > 10:
+                        snippet = text[:200] + ("..." if len(text) > 200 else "")
+                        result["reasoning"].append(snippet)
+                elif isinstance(block, str) and len(block.strip()) > 10:
+                    snippet = block.strip()[:200] + ("..." if len(block.strip()) > 200 else "")
+                    result["reasoning"].append(snippet)
 
-    # Keep only last 8 tool calls
+    # Keep only last 8 tool calls and last 5 reasoning entries
     result["recentTools"] = result["recentTools"][-8:]
+    result["reasoning"] = result["reasoning"][-5:]
 
     return result
 
@@ -684,6 +702,7 @@ def scan_sessions():
                     "currentTool": state["currentTool"],
                     "currentAction": state["currentAction"] or state.get("lastUserMessage") or "Working...",
                     "recentTools": state["recentTools"],
+                    "reasoning": state["reasoning"],
                     "goalId": None,
                     "tokens": state["tokens"],
                     "model": state["model"],
@@ -711,6 +730,7 @@ def scan_sessions():
                             "status": "active",
                             "currentTool": sa_state["currentTool"],
                             "currentAction": sa_state["currentAction"] or "Working...",
+                            "reasoning": sa_state["reasoning"],
                             "goalId": None,
                             "tokens": sa_state["tokens"],
                             "model": sa_state["model"],

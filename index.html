@@ -1512,6 +1512,7 @@ svg#main-viz {
     <span class="legend-item" title="Nodes breathe faster when active">Breathing = activity</span>
     <span class="legend-item" title="Closer to goal = more tokens invested">Distance = investment</span>
     <span class="legend-item" title="Bigger nodes have used more tokens">Size = workload</span>
+    <span class="legend-item" title="Faster particles = higher token throughput">Speed = throughput</span>
   </div>
 </div>
 
@@ -3877,44 +3878,30 @@ svg#main-viz {
     agentTreeLayer.selectAll('.goal-tendril-glow').remove();
     agentTreeLayer.selectAll('.goal-tendril').remove();
 
-    // Current task label — subtle text below agent tree showing what's happening
-    const taskText = state.activeTask ? state.activeTask.name || '' : '';
-    let taskLabel = agentTreeLayer.select('.current-task-label');
-    if (taskText && agents.length > 0) {
-      if (taskLabel.empty()) {
-        taskLabel = agentTreeLayer.append('text').attr('class', 'current-task-label')
-          .attr('text-anchor', 'middle')
-          .attr('font-family', 'var(--font-sans)')
-          .attr('pointer-events', 'none');
-      }
-      const root = agents.find(a => !a.parent) || agents[0];
-      const maxR = Math.max(...agents.map(a => a.nodeRadius || 20));
-      const taskInvZ = 1 / Math.max(1, state.zoom);
-      taskLabel
-        .attr('font-size', 11 * taskInvZ)
-        .attr('x', hbCx)
-        .attr('y', root.y + maxR + 45 * taskInvZ)
-        .attr('fill', 'rgba(255,255,255,0.25)')
-        .text(taskText.length > 50 ? taskText.slice(0, 48) + '...' : taskText);
-    } else {
-      taskLabel.remove();
-    }
+    // Current task label removed — already shown in HUD and Mission Status
+    agentTreeLayer.select('.current-task-label').remove();
   }
 
   function updateDataParticles(linkData) {
-    // Spawn new particles occasionally
-    if (state.time % 20 === 0) {
+    // Spawn new particles — rate and speed based on token throughput
+    if (state.time % 12 === 0) {
       linkData.forEach(link => {
-        if (link.target.status === 'active' && Math.random() > 0.5) {
-          state.dataParticles.push({
-            id: 'dp-' + Math.random().toString(36).slice(2),
-            source: link.source,
-            target: link.target,
-            cpx: link.cpx, cpy: link.cpy,
-            t: 0,
-            speed: 0.015 + Math.random() * 0.01,
-          });
-        }
+        if (link.target.status !== 'active') return;
+        // Throughput: tokens determine spawn chance and particle speed
+        const tokens = link.target.tokens ? link.target.tokens.total : 0;
+        const throughput = Math.min(1, tokens / 60000); // 0-1 normalized
+        const spawnChance = 0.3 + throughput * 0.5; // 30-80% chance
+        if (Math.random() > spawnChance) return;
+        // Speed: busier agents = faster particles (0.008 slow → 0.035 fast)
+        const speed = 0.008 + throughput * 0.027 + Math.random() * 0.004;
+        state.dataParticles.push({
+          id: 'dp-' + Math.random().toString(36).slice(2),
+          source: link.source,
+          target: link.target,
+          cpx: link.cpx, cpy: link.cpy,
+          t: 0,
+          speed,
+        });
       });
     }
     // Advance and cull

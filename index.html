@@ -3845,6 +3845,31 @@ svg#main-viz {
         return t.length > 28 ? t.slice(0, 26) + '...' : t;
       });
 
+    // Subtask particles — tiny dots orbiting inside each node, one per recent action
+    merged.each(function(d) {
+      const tools = d.recentTools || [];
+      const items = tools.slice(-6); // max 6 particles
+      const g = d3.select(this);
+      const dots = g.selectAll('.subtask-dot').data(items, (t, i) => d.id + '-st-' + i);
+      const entering2 = dots.enter().append('circle').attr('class', 'subtask-dot')
+        .attr('r', 1.5)
+        .attr('fill', 'rgba(220,230,250,0.6)')
+        .attr('pointer-events', 'none');
+      entering2.merge(dots)
+        .attr('cx', (t, i) => {
+          const orbitR = d.nodeRadius * 0.55;
+          const angle = (i / Math.max(items.length, 1)) * Math.PI * 2 + state.time * 0.02;
+          return Math.cos(angle) * orbitR;
+        })
+        .attr('cy', (t, i) => {
+          const orbitR = d.nodeRadius * 0.55;
+          const angle = (i / Math.max(items.length, 1)) * Math.PI * 2 + state.time * 0.02;
+          return Math.sin(angle) * orbitR;
+        })
+        .attr('opacity', d.status === 'active' ? 0.7 : 0.3);
+      dots.exit().remove();
+    });
+
     nodeGroups.exit().transition().duration(500).attr('opacity', 0).remove();
 
     // Goal tendrils — connect to specific active/recent particle in the colony
@@ -4858,6 +4883,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'Task', goalId: 'audience',
       currentAction: 'Coordinating content pipeline',
       tokens: { input: 45200, output: 12800, total: 58000 },
+      recentTools: ['Read: STATE.md', 'Read: GOALS.md', 'Task: spawn content-writer', 'Task: spawn research-scout', 'Read: METRICS.md'],
       nodeRadius: 30,
     });
     state.agents.set('content-writer', {
@@ -4865,6 +4891,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'Write', goalId: 'audience',
       currentAction: 'Drafting blog post on AI applications',
       tokens: { input: 22000, output: 8500, total: 30500 },
+      recentTools: ['Read: blog-outline.md', 'WebSearch: AI trends 2026', 'Write: draft-post.md', 'Edit: draft-post.md'],
       nodeRadius: 22,
     });
     state.agents.set('blog-drafter', {
@@ -4872,6 +4899,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'Write', goalId: 'audience',
       currentAction: 'Writing intro section',
       tokens: { input: 6000, output: 3200, total: 9200 },
+      recentTools: ['Read: draft-post.md', 'Write: intro-section.md', 'Edit: intro-section.md'],
       nodeRadius: 16,
     });
     state.agents.set('seo-optimizer', {
@@ -4879,6 +4907,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'Grep', goalId: 'audience',
       currentAction: 'Analyzing keyword density',
       tokens: { input: 4800, output: 1600, total: 6400 },
+      recentTools: ['Grep: keyword density', 'Read: seo-config.json', 'Grep: meta tags'],
       nodeRadius: 16,
     });
     state.agents.set('research-scout', {
@@ -4886,6 +4915,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'WebSearch', goalId: 'research',
       currentAction: 'Searching competitor strategies',
       tokens: { input: 15000, output: 4200, total: 19200 },
+      recentTools: ['WebSearch: competitor analysis', 'WebFetch: market data', 'Read: research-notes.md', 'Write: findings.md'],
       nodeRadius: 22,
     });
     state.agents.set('deep-researcher', {
@@ -4893,6 +4923,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'Read', goalId: 'research',
       currentAction: 'Reading embedding analysis paper',
       tokens: { input: 8000, output: 2100, total: 10100 },
+      recentTools: ['WebFetch: arxiv paper', 'Read: embedding-analysis.pdf', 'Write: summary.md'],
       nodeRadius: 16,
     });
     state.agents.set('trend-analyzer', {
@@ -4900,6 +4931,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'WebFetch', goalId: 'research',
       currentAction: 'Fetching trending topics API',
       tokens: { input: 5200, output: 1800, total: 7000 },
+      recentTools: ['WebFetch: trends API', 'Grep: trending keywords'],
       nodeRadius: 16,
     });
     state.agents.set('code-engineer', {

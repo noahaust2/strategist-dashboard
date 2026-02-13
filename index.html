@@ -1446,7 +1446,7 @@ svg#main-viz {
         <div class="guide-area-title">Goal Clusters (outer ring)</div>
         <div class="guide-area-desc">
           Each particle cluster is a <strong>goal</strong>. Particles = commits.
-          <strong>Colored arcs</strong> = momentum. <strong>Dashed amber ring</strong> = stalled.
+          Brighter particles = recent activity. Dim = stalled.
           <strong>Purple lightning</strong> = daydream connections between goals.
         </div>
       </div>
@@ -1499,7 +1499,9 @@ svg#main-viz {
   <div class="legend-group">
     <span class="legend-group-title">Signals</span>
     <span class="legend-item" title="Agent node outlines match their assigned goal color">Outline = goal</span>
+    <span class="legend-item" title="Rotating purple arc = agent is reading/searching">Scan arc = research</span>
     <span class="legend-item" title="Nodes breathe faster when active, slow when stalled">Breathing = activity</span>
+    <span class="legend-item" title="Idle agents fade over time">Opacity = freshness</span>
     <span class="legend-item" title="Nodes drift toward the goal they're working on">Drift = focus</span>
     <span class="legend-item" title="Bigger nodes have used more tokens">Size = workload</span>
   </div>
@@ -2765,60 +2767,8 @@ svg#main-viz {
 
     colonyHalos.exit().remove();
 
-    // Momentum arcs — shows recent activity intensity (commits in last 7d) not fixed progress
-    const momentumData = colonyData.filter(d => d.particles.length > 0);
-    const momentumArcs = coloniesLayer.selectAll('.colony-momentum-arc').data(momentumData, d => d.id);
-
-    momentumArcs.enter()
-      .append('path')
-      .attr('class', 'colony-momentum-arc')
-      .attr('fill', 'none')
-      .merge(momentumArcs)
-      .attr('d', d => {
-        const r = d.radius + 24;
-        const recent = d.particles.filter(p => p.age < 7).length;
-        // Momentum: ratio of recent commits to total, capped at 1
-        // More recent = more momentum (full ring = all commits are fresh)
-        const momentum = Math.min(1, recent / Math.max(1, d.particles.length * 0.5));
-        const endAngle = -Math.PI / 2 + momentum * Math.PI * 2;
-        const startAngle = -Math.PI / 2;
-        const x1 = d.cx + Math.cos(startAngle) * r;
-        const y1 = d.cy + Math.sin(startAngle) * r;
-        const x2 = d.cx + Math.cos(endAngle) * r;
-        const y2 = d.cy + Math.sin(endAngle) * r;
-        const large = momentum > 0.5 ? 1 : 0;
-        if (momentum < 0.02) return ''; // too small to draw
-        return momentum >= 1
-          ? `M${x1},${y1} A${r},${r} 0 1,1 ${x1 - 0.01},${y1}`
-          : `M${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2}`;
-      })
-      .attr('stroke', d => d.color.base)
-      .attr('stroke-width', 2)
-      .attr('stroke-opacity', d => d.active ? 0.45 : 0.2)
-      .attr('stroke-linecap', 'round');
-
-    momentumArcs.exit().remove();
-
-    // Stalled goal indicators — dashed amber ring when no recent commits
-    const stalledData = colonyData.filter(d => {
-      if (d.particles.length === 0) return false;
-      const recentCount = d.particles.filter(p => p.age < 7).length;
-      return recentCount === 0; // no commits in 7 days = stalled
-    });
-    const stalledRings = coloniesLayer.selectAll('.colony-stalled').data(stalledData, d => d.id);
-    stalledRings.enter()
-      .append('circle')
-      .attr('class', 'colony-stalled')
-      .attr('fill', 'none')
-      .merge(stalledRings)
-      .attr('cx', d => d.cx)
-      .attr('cy', d => d.cy)
-      .attr('r', d => d.radius + 28)
-      .attr('stroke', 'rgba(234,179,8,0.2)')
-      .attr('stroke-width', 1)
-      .attr('stroke-dasharray', '3,5')
-      .attr('stroke-dashoffset', state.time * 0.2);
-    stalledRings.exit().remove();
+    coloniesLayer.selectAll('.colony-momentum-arc').remove();
+    coloniesLayer.selectAll('.colony-stalled').remove();
 
     // Colony labels — goal name + commit count
     const labelData = state.zoom > 0.3 ? colonyData : [];
@@ -3538,9 +3488,33 @@ svg#main-viz {
         targetY += jy;
       }
 
-      // Smooth interpolation toward target (prevents jumping)
-      a.x = a.x + (targetX - a.x) * 0.08;
-      a.y = a.y + (targetY - a.y) * 0.08;
+      a._targetX = targetX;
+      a._targetY = targetY;
+    });
+
+    // Collision avoidance — push overlapping nodes apart
+    for (let i = 0; i < agents.length; i++) {
+      for (let j = i + 1; j < agents.length; j++) {
+        const a = agents[i], b = agents[j];
+        const dx = a._targetX - b._targetX;
+        const dy = a._targetY - b._targetY;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const minDist = (a.nodeRadius + b.nodeRadius) + 12;
+        if (dist < minDist) {
+          const push = (minDist - dist) * 0.5;
+          const nx = dx / dist, ny = dy / dist;
+          a._targetX += nx * push;
+          a._targetY += ny * push;
+          b._targetX -= nx * push;
+          b._targetY -= ny * push;
+        }
+      }
+    }
+
+    // Smooth interpolation toward target (prevents jumping)
+    agents.forEach(a => {
+      a.x = a.x + (a._targetX - a.x) * 0.08;
+      a.y = a.y + (a._targetY - a.y) * 0.08;
     });
   }
 
@@ -3712,6 +3686,7 @@ svg#main-viz {
       .on('mouseleave', function() { hideAgentDetail(); })
       .on('click', function(event, d) { openSidebarPanel('process'); });
     entering.append('circle').attr('class', 'agent-node-bg');
+    entering.append('path').attr('class', 'agent-mode-arc').attr('fill', 'none');
     entering.append('circle').attr('class', 'agent-node-ring');
     entering.append('text').attr('class', 'agent-node-label');
     entering.append('text').attr('class', 'agent-node-action');
@@ -3721,15 +3696,19 @@ svg#main-viz {
     const merged = entering.merge(nodeGroups);
     // Rest/rate-limit dims all nodes
     const modeDim = state.agentMode === 'rest' ? 0.4 : state.agentMode === 'rate_limited' ? 0.7 : 1;
+    const now = Date.now();
     merged.each(function(d) {
       // Smooth entrance: scale up over 30 frames
       const age = state.time - (d._enterTime || 0);
       const entranceProg = Math.min(1, age / 30);
       const eased = 1 - Math.pow(1 - entranceProg, 3); // ease-out cubic
       const scale = 0.3 + 0.7 * eased;
+      // Opacity fades when agent hasn't updated recently (idle decay)
+      const sinceLast = d._lastUpdate ? (now - d._lastUpdate) / 1000 : 0;
+      const freshness = d.status === 'active' ? 1 : Math.max(0.35, 1 - sinceLast / 300);
       d3.select(this)
         .attr('transform', `translate(${d.x},${d.y}) scale(${scale})`)
-        .attr('opacity', eased * modeDim);
+        .attr('opacity', eased * modeDim * freshness);
     });
 
     // Node size breathes when active — speed modulated by system mode
@@ -3768,6 +3747,25 @@ svg#main-viz {
         const intensity = d.status === 'active' ? (0.06 + Math.sin(state.time * 0.04) * 0.02) : 0.03;
         return `rgba(180,195,220,${intensity})`;
       });
+
+    // Mode indicator — rotating scan arc when researching (reading, searching, fetching)
+    // Building needs no extra indicator — data flow particles along links already show it
+    const RESEARCH_TOOLS = new Set(['Read', 'Grep', 'Glob', 'WebSearch', 'WebFetch', 'Task']);
+    merged.select('.agent-mode-arc')
+      .attr('d', d => {
+        if (d.status !== 'active' || !d.currentTool) return '';
+        if (!RESEARCH_TOOLS.has(d.currentTool)) return '';
+        const r = d.nodeRadius + 4;
+        // Rotating 90-degree scan arc
+        const sweep = Math.PI * 0.5;
+        const offset = state.time * 0.03;
+        const x1 = Math.cos(offset) * r, y1 = Math.sin(offset) * r;
+        const x2 = Math.cos(offset + sweep) * r, y2 = Math.sin(offset + sweep) * r;
+        return `M${x1},${y1} A${r},${r} 0 0,1 ${x2},${y2}`;
+      })
+      .attr('stroke', 'rgba(167,139,250,0.45)')
+      .attr('stroke-width', 1.5)
+      .attr('stroke-linecap', 'round');
 
     // Agent name INSIDE the circle
     merged.select('.agent-node-label')
@@ -4379,6 +4377,7 @@ svg#main-viz {
               // Ensure agents have valid positions (prevents 0,0 overlap)
               if (!a.x || a.x === 0) a.x = cx;
               if (!a.y || a.y === 0) a.y = cy;
+              a._lastUpdate = Date.now();
               state.agents.set(a.id, a);
             });
             renderAgentTree();

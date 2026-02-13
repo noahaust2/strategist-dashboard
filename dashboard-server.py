@@ -87,7 +87,7 @@ CLAUDE_PROJECTS_DIRS = [
     "/home/claude-agent/.claude/projects",
     "/root/.claude/projects",
 ]
-SESSION_ACTIVE_THRESHOLD = 60   # seconds — file modified within this = active
+SESSION_ACTIVE_THRESHOLD = 900  # seconds (15 min) — sessions idle between turns are still active
 SESSION_POLL_INTERVAL = 3
 
 # ── Shared state ─────────────────────────────────────────────────────────────
@@ -693,14 +693,16 @@ def scan_sessions():
 
                 session_id = os.path.splitext(os.path.basename(jsonl_path))[0]
                 state = _parse_session_tail(_tail_read(jsonl_path))
+                idle_secs = now - mtime
+                session_status = "active" if idle_secs < 60 else "idle"
 
                 agents.append({
                     "id": session_id,
                     "label": project_label,
                     "parent": None,
-                    "status": "active",
+                    "status": session_status,
                     "currentTool": state["currentTool"],
-                    "currentAction": state["currentAction"] or state.get("lastUserMessage") or "Working...",
+                    "currentAction": state["currentAction"] or state.get("lastUserMessage") or ("Waiting for input..." if session_status == "idle" else "Working..."),
                     "recentTools": state["recentTools"],
                     "reasoning": state["reasoning"],
                     "goalId": None,

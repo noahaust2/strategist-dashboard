@@ -1485,23 +1485,23 @@ svg#main-viz {
 <!-- Legend -->
 <div id="legend">
   <div class="legend-group">
-    <span class="legend-group-title">Phases</span>
-    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-cyan)"></span>Read</span>
+    <span class="legend-group-title">Background</span>
+    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-cyan)"></span>Read phase</span>
     <span class="legend-item"><span class="legend-dot" style="background:var(--accent-amber)"></span>Decide</span>
-    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-blue)"></span>Exec</span>
+    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-blue)"></span>Execute</span>
     <span class="legend-item"><span class="legend-dot" style="background:var(--accent-green)"></span>Verify</span>
   </div>
   <div class="legend-divider"></div>
-  <div class="legend-group">
-    <span class="legend-group-title">Agents</span>
-    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-blue);width:12px;height:12px;"></span>Lead</span>
-    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-green);width:9px;height:9px;"></span>Team</span>
-    <span class="legend-item"><span class="legend-dot" style="background:var(--accent-amber);width:7px;height:7px;"></span>Sub</span>
+  <div class="legend-group" id="legend-goals">
+    <span class="legend-group-title">Goals (colonies + outlines)</span>
   </div>
   <div class="legend-divider"></div>
   <div class="legend-group">
-    <span class="legend-group-title">Particles</span>
-    <span class="legend-item"><span class="legend-line" style="background:var(--accent-blue);"></span>= 1 commit</span>
+    <span class="legend-group-title">Signals</span>
+    <span class="legend-item" title="Agent node outlines match their assigned goal color">Outline = goal</span>
+    <span class="legend-item" title="Nodes breathe faster when active, slow when stalled">Breathing = activity</span>
+    <span class="legend-item" title="Nodes drift toward the goal they're working on">Drift = focus</span>
+    <span class="legend-item" title="Bigger nodes have used more tokens">Size = workload</span>
   </div>
 </div>
 
@@ -2072,6 +2072,29 @@ svg#main-viz {
         c.cy = y;
       }
     });
+
+    // Populate legend with goal colors
+    const legendGoals = document.getElementById('legend-goals');
+    if (legendGoals) {
+      const items = legendGoals.querySelectorAll('.legend-item');
+      const currentNames = new Set();
+      state.colonies.forEach(colony => currentNames.add(colony.goal.name || colony.goal.id));
+      const existingNames = new Set(Array.from(items).map(el => el.textContent.trim()));
+      if (currentNames.size !== existingNames.size || ![...currentNames].every(n => existingNames.has(n))) {
+        // Remove old items, keep title
+        items.forEach(el => el.remove());
+        state.colonies.forEach(colony => {
+          const span = document.createElement('span');
+          span.className = 'legend-item';
+          const dot = document.createElement('span');
+          dot.className = 'legend-dot';
+          dot.style.background = colony.color.base;
+          span.appendChild(dot);
+          span.appendChild(document.createTextNode(colony.goal.name || colony.goal.id));
+          legendGoals.appendChild(span);
+        });
+      }
+    }
   }
 
   // ----------------------------------------------------------
@@ -3631,14 +3654,13 @@ svg#main-viz {
       .merge(glowLinks)
       .attr('d', d => `M${d.source.x},${d.source.y} Q${d.cpx},${d.cpy} ${d.target.x},${d.target.y}`)
       .attr('stroke', d => {
-        const ck = agentColorKey(d.target, agents);
         const active = d.target.status === 'active';
-        return PALETTE[ck].glow + (active ? '0.12)' : '0.04)');
+        return active ? 'rgba(180,195,220,0.1)' : 'rgba(160,175,200,0.03)';
       })
       .attr('stroke-width', 8);
     glowLinks.exit().remove();
 
-    // Curved path links (tendrils)
+    // Curved path links (tendrils) — neutral color, hierarchy not goal
     const links = agentTreeLayer.selectAll('.agent-link-path').data(linkData, d => d.id);
     links.enter().append('path').attr('class', 'agent-link-path')
       .style('cursor', 'pointer')
@@ -3661,11 +3683,10 @@ svg#main-viz {
       .merge(links)
       .attr('d', d => `M${d.source.x},${d.source.y} Q${d.cpx},${d.cpy} ${d.target.x},${d.target.y}`)
       .attr('stroke', d => {
-        const ck = agentColorKey(d.target, agents);
         const active = d.target.status === 'active';
-        return PALETTE[ck].glow + (active ? '0.5)' : '0.2)');
+        return active ? 'rgba(200,215,235,0.45)' : 'rgba(180,195,220,0.18)';
       })
-      .attr('stroke-width', d => d.target.status === 'active' ? 2.5 : 1.5)
+      .attr('stroke-width', d => d.target.status === 'active' ? 2 : 1.2)
       .attr('stroke-dasharray', d => d.target.status === 'done' ? 'none' : '6,4');
     links.exit().remove();
 
@@ -3677,11 +3698,8 @@ svg#main-viz {
       .merge(dps)
       .attr('cx', d => bezierPoint(d.source.x, d.source.y, d.cpx, d.cpy, d.target.x, d.target.y, d.t).x)
       .attr('cy', d => bezierPoint(d.source.x, d.source.y, d.cpx, d.cpy, d.target.x, d.target.y, d.t).y)
-      .attr('fill', d => {
-        const ck = agentColorKey(d.target, agents);
-        return PALETTE[ck] ? PALETTE[ck].base : '#4a9eff';
-      })
-      .attr('opacity', d => 0.7 + Math.sin(d.t * Math.PI) * 0.3);
+      .attr('fill', 'rgba(210,220,240,0.9)')
+      .attr('opacity', d => 0.6 + Math.sin(d.t * Math.PI) * 0.3);
     dps.exit().remove();
 
     // Agent nodes
@@ -3727,14 +3745,10 @@ svg#main-viz {
         return d.status === 'active' ? base * breatheScale : base * 0.9;
       })
       .attr('fill', d => {
-        const ck = agentColorKey(d, agents);
-        const intensity = d.status === 'active' ? 0.1 : 0.03;
-        return PALETTE[ck].glow + intensity + ')';
+        const intensity = d.status === 'active' ? 0.08 : 0.02;
+        return `rgba(200,210,230,${intensity})`;
       })
-      .attr('filter', d => {
-        const ck = agentColorKey(d, agents);
-        return d.status === 'active' ? `url(#glow-${ck})` : 'none';
-      });
+      .attr('filter', d => d.status === 'active' ? 'url(#glow-blue)' : 'none');
 
     merged.select('.agent-node-ring')
       .attr('r', d => {
@@ -3745,25 +3759,21 @@ svg#main-viz {
         const ck = agentColorKey(d, agents);
         return PALETTE[ck].base;
       })
-      .attr('stroke-width', d => d.status === 'active' ? 2.5 : 1.5)
+      .attr('stroke-width', d => d.status === 'active' ? 1.8 : 1)
       .attr('stroke-opacity', d => {
-        if (d.status === 'active') return 0.7 + Math.sin(state.time * 0.04) * 0.2;
-        return d.status === 'done' ? 0.25 : 0.4;
+        if (d.status === 'active') return 0.5 + Math.sin(state.time * 0.04) * 0.15;
+        return d.status === 'done' ? 0.2 : 0.3;
       })
       .attr('fill', d => {
-        const ck = agentColorKey(d, agents);
-        const intensity = d.status === 'active' ? (0.15 + Math.sin(state.time * 0.04) * 0.05) : 0.06;
-        return PALETTE[ck].glow + intensity + ')';
+        const intensity = d.status === 'active' ? (0.06 + Math.sin(state.time * 0.04) * 0.02) : 0.03;
+        return `rgba(180,195,220,${intensity})`;
       });
 
     // Agent name INSIDE the circle
     merged.select('.agent-node-label')
       .attr('y', 1)
       .attr('dominant-baseline', 'central')
-      .attr('fill', d => {
-        const ck = agentColorKey(d, agents);
-        return PALETTE[ck].base;
-      })
+      .attr('fill', d => d.status === 'active' ? 'rgba(230,235,245,0.95)' : 'rgba(200,210,225,0.7)')
       .attr('font-size', d => d.nodeRadius > 30 ? 13 : d.nodeRadius > 24 ? 11 : 9)
       .attr('opacity', 1)
       .text(d => d.label.length > 12 ? d.label.split(' ').map(w => w[0]).join('') : d.label);
@@ -3946,8 +3956,10 @@ svg#main-viz {
     if (agent.goalId && state.colonies.has(agent.goalId)) {
       const colony = state.colonies.get(agent.goalId);
       goalEl.textContent = 'Working on: ' + (colony.goal.name || agent.goalId);
+      goalEl.style.color = colony.color.base;
     } else {
       goalEl.textContent = '';
+      goalEl.style.color = '';
     }
 
     document.getElementById('agent-detail-action').textContent = agent.currentAction || 'Idle';

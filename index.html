@@ -468,23 +468,25 @@ svg#main-viz {
 #conn-dot.disconnected { background: var(--health-red); }
 #conn-dot.connecting { background: var(--health-yellow); animation: healthPulse 1s ease-in-out infinite; }
 
-/* HUD Bar */
+/* HUD Bar — minimal floating strip */
 #hud-bar {
-  position: fixed; top: 0; left: 0; right: 0;
+  position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
   z-index: 150;
-  height: 52px;
+  height: 36px;
   display: flex; align-items: center;
-  padding: 0 24px;
-  background: rgba(10, 10, 15, 0.82);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--border-subtle);
-  gap: 20px;
+  padding: 0 16px;
+  background: rgba(10, 10, 15, 0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(42, 42, 58, 0.3);
+  border-radius: 20px;
+  gap: 14px;
+  width: auto;
+  max-width: 600px;
 }
 
 #hud-health {
-  display: flex; align-items: center; gap: 10px;
-  min-width: 180px;
+  display: flex; align-items: center; gap: 6px;
 }
 
 #hud-health .hud-dot {
@@ -500,17 +502,32 @@ svg#main-viz {
 #hud-health .hud-dot.red { background: var(--health-red); box-shadow: 0 0 10px rgba(239,68,68,0.5); }
 
 #hud-health .hud-status-text {
-  font-size: 12px;
-  color: var(--text-secondary);
+  font-size: 10px;
+  color: var(--text-muted);
   font-weight: 500;
   white-space: nowrap;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 0.3s, opacity 0.3s;
+}
+
+#hud-bar:hover #hud-health .hud-status-text {
+  max-width: 200px;
+  opacity: 1;
 }
 
 #hud-task {
-  flex: 1;
-  display: flex; align-items: center; justify-content: center; gap: 12px;
-  min-width: 0;
+  display: flex; align-items: center; gap: 8px;
   overflow: hidden;
+  max-width: 0;
+  opacity: 0;
+  transition: max-width 0.4s ease, opacity 0.3s;
+}
+
+#hud-bar:hover #hud-task {
+  max-width: 400px;
+  opacity: 1;
 }
 
 .hud-goal-badge {
@@ -544,9 +561,16 @@ svg#main-viz {
 }
 
 #hud-metrics {
-  display: flex; align-items: center; gap: 20px;
-  min-width: 180px;
-  justify-content: flex-end;
+  display: flex; align-items: center; gap: 12px;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 0.4s ease, opacity 0.3s;
+}
+
+#hud-bar:hover #hud-metrics {
+  max-width: 300px;
+  opacity: 1;
 }
 
 .hud-metric {
@@ -1351,23 +1375,7 @@ svg#main-viz {
   white-space: nowrap;
 }
 
-/* Ambient background animation */
-@keyframes ambientShift {
-  0% { background-position: 0% 0%; }
-  50% { background-position: 100% 100%; }
-  100% { background-position: 0% 0%; }
-}
-
-#canvas-container::before {
-  content: '';
-  position: absolute; inset: 0;
-  background: radial-gradient(ellipse at 20% 50%, rgba(74,158,255,0.03) 0%, transparent 50%),
-              radial-gradient(ellipse at 80% 20%, rgba(139,92,246,0.03) 0%, transparent 50%),
-              radial-gradient(ellipse at 50% 80%, rgba(34,211,153,0.02) 0%, transparent 50%);
-  animation: ambientShift 30s ease-in-out infinite;
-  pointer-events: none;
-  z-index: 0;
-}
+/* Ambient background — now handled by canvas drawBg() for phase/health encoding */
 </style>
 </head>
 <body>
@@ -1817,17 +1825,75 @@ svg#main-viz {
     }
   }
 
-  function drawBg(t) {
-    bgCtx.clearRect(0, 0, state.width, state.height);
-    bgCtx.fillStyle = '#0a0a0f';
-    bgCtx.fillRect(0, 0, state.width, state.height);
+  // Phase color map for ambient nebula
+  const PHASE_NEBULA = {
+    read:    { r: 34, g: 211, b: 238 },  // cyan
+    decide:  { r: 245, g: 158, b: 11 },  // amber
+    execute: { r: 74, g: 158, b: 255 },  // blue
+    verify:  { r: 52, g: 211, b: 153 },  // green
+  };
 
+  // Health modifiers for visual mood
+  const HEALTH_MOOD = {
+    green:  { starBright: 1.0, nebulaIntensity: 1.0, pulseSpeed: 1.0 },
+    yellow: { starBright: 0.7, nebulaIntensity: 1.4, pulseSpeed: 1.8 },
+    red:    { starBright: 0.4, nebulaIntensity: 2.0, pulseSpeed: 3.0 },
+  };
+
+  function drawBg(t) {
+    const w = state.width, h = state.height;
+    bgCtx.clearRect(0, 0, w, h);
+    bgCtx.fillStyle = '#0a0a0f';
+    bgCtx.fillRect(0, 0, w, h);
+
+    const phase = state.agentPhase || 'read';
+    const nebula = PHASE_NEBULA[phase] || PHASE_NEBULA.read;
+    const mood = HEALTH_MOOD[state.health] || HEALTH_MOOD.green;
+
+    // Phase-aware nebula glow at center (where agents live)
+    const cx = w / 2, cy = h / 2;
+    const nebulaRadius = Math.min(w, h) * 0.5;
+    const nebulaPulse = 0.015 + Math.sin(t * 0.3 * mood.pulseSpeed) * 0.008;
+    const nebulaAlpha = nebulaPulse * mood.nebulaIntensity;
+
+    const grad = bgCtx.createRadialGradient(cx, cy, 0, cx, cy, nebulaRadius);
+    grad.addColorStop(0, `rgba(${nebula.r},${nebula.g},${nebula.b},${nebulaAlpha * 1.5})`);
+    grad.addColorStop(0.4, `rgba(${nebula.r},${nebula.g},${nebula.b},${nebulaAlpha * 0.5})`);
+    grad.addColorStop(1, 'transparent');
+    bgCtx.fillStyle = grad;
+    bgCtx.fillRect(0, 0, w, h);
+
+    // Subtle secondary nebula drift (offset, slower)
+    const drift = t * 0.05;
+    const nx2 = cx + Math.sin(drift) * nebulaRadius * 0.3;
+    const ny2 = cy + Math.cos(drift * 0.7) * nebulaRadius * 0.2;
+    const grad2 = bgCtx.createRadialGradient(nx2, ny2, 0, nx2, ny2, nebulaRadius * 0.6);
+    grad2.addColorStop(0, `rgba(${nebula.r},${nebula.g},${nebula.b},${nebulaAlpha * 0.4})`);
+    grad2.addColorStop(1, 'transparent');
+    bgCtx.fillStyle = grad2;
+    bgCtx.fillRect(0, 0, w, h);
+
+    // Stars — brightness modulated by health mood
     for (const star of bgStars) {
-      const flicker = Math.sin(t * star.speed + star.phase) * 0.15 + star.alpha;
+      const flicker = Math.sin(t * star.speed * mood.pulseSpeed + star.phase) * 0.15 + star.alpha;
+      const brightness = Math.max(0.02, flicker * mood.starBright);
       bgCtx.beginPath();
       bgCtx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
-      bgCtx.fillStyle = `rgba(200,200,240,${Math.max(0.02, flicker)})`;
+      bgCtx.fillStyle = `rgba(200,200,240,${brightness})`;
       bgCtx.fill();
+    }
+
+    // Context vignette — edges darken as context fills up
+    const total = (state.context.system || 0) + (state.context.conversation || 0) +
+                  (state.context.tools || 0) + (state.context.thinking || 0);
+    const ctxPct = Math.min(1, total / (state.context.max || 200000));
+    if (ctxPct > 0.3) {
+      const vignetteStrength = (ctxPct - 0.3) * 0.6; // 0 to ~0.42
+      const vGrad = bgCtx.createRadialGradient(cx, cy, nebulaRadius * 0.5, cx, cy, Math.max(w, h) * 0.7);
+      vGrad.addColorStop(0, 'transparent');
+      vGrad.addColorStop(1, `rgba(5,5,10,${vignetteStrength})`);
+      bgCtx.fillStyle = vGrad;
+      bgCtx.fillRect(0, 0, w, h);
     }
   }
 
@@ -3074,11 +3140,18 @@ svg#main-viz {
     const merged = entering.merge(nodeGroups);
     merged.attr('transform', d => `translate(${d.x},${d.y})`);
 
+    // Node size breathes when active (encodes activity through motion)
+    const breatheScale = 1 + Math.sin(state.time * 0.04) * 0.06;
+
     merged.select('.agent-node-bg')
-      .attr('r', d => d.nodeRadius + 8)
+      .attr('r', d => {
+        const base = d.nodeRadius + 8;
+        return d.status === 'active' ? base * breatheScale : base * 0.9;
+      })
       .attr('fill', d => {
         const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
-        return PALETTE[ck].glow + '0.06)';
+        const intensity = d.status === 'active' ? 0.1 : 0.03;
+        return PALETTE[ck].glow + intensity + ')';
       })
       .attr('filter', d => {
         const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
@@ -3086,16 +3159,23 @@ svg#main-viz {
       });
 
     merged.select('.agent-node-ring')
-      .attr('r', d => d.nodeRadius)
+      .attr('r', d => {
+        const base = d.nodeRadius;
+        return d.status === 'active' ? base * breatheScale : base;
+      })
       .attr('stroke', d => {
         const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
         return PALETTE[ck].base;
       })
       .attr('stroke-width', d => d.status === 'active' ? 2.5 : 1.5)
-      .attr('stroke-opacity', d => d.status === 'active' ? 0.9 : 0.4)
+      .attr('stroke-opacity', d => {
+        if (d.status === 'active') return 0.7 + Math.sin(state.time * 0.04) * 0.2;
+        return d.status === 'done' ? 0.25 : 0.4;
+      })
       .attr('fill', d => {
         const ck = AGENT_COLORS[agents.indexOf(d) % AGENT_COLORS.length];
-        return PALETTE[ck].glow + (d.status === 'active' ? '0.2)' : '0.08)');
+        const intensity = d.status === 'active' ? (0.15 + Math.sin(state.time * 0.04) * 0.05) : 0.06;
+        return PALETTE[ck].glow + intensity + ')';
       });
 
     // Agent name INSIDE the circle
@@ -3110,12 +3190,12 @@ svg#main-viz {
       .attr('opacity', 1)
       .text(d => d.label.length > 12 ? d.label.split(' ').map(w => w[0]).join('') : d.label);
 
-    // Full name below the circle
+    // Full name below the circle — hidden for minimal look
     merged.select('.agent-node-action')
       .attr('y', d => d.nodeRadius + 16)
       .attr('fill', 'var(--text-secondary)')
       .attr('font-size', 11)
-      .attr('opacity', 0.85)
+      .attr('opacity', 0)
       .attr('text-anchor', 'middle')
       .text(d => d.label);
 
@@ -3127,17 +3207,19 @@ svg#main-viz {
     };
     const badgeLen = d => Math.min(30, (badgeText(d) || '').length);
 
+    // Tool badge — hidden for minimal look (details on hover)
     merged.select('.agent-tool-bg')
+      .attr('opacity', 0)
       .attr('x', d => -(Math.min(90, badgeLen(d) * 3.5 + 8)))
       .attr('y', d => d.nodeRadius + 26)
       .attr('width', d => Math.min(180, badgeLen(d) * 7 + 16))
       .attr('height', 16)
       .attr('rx', 4)
-      .attr('fill', d => badgeText(d) ? 'rgba(34,211,238,0.1)' : 'none')
-      .attr('stroke', d => badgeText(d) ? 'rgba(34,211,238,0.25)' : 'none')
-      .attr('stroke-width', 0.5);
+      .attr('fill', 'none')
+      .attr('stroke', 'none');
 
     merged.select('.agent-node-tool-badge')
+      .attr('opacity', 0)
       .attr('y', d => d.nodeRadius + 38)
       .attr('fill', 'var(--accent-cyan)')
       .attr('font-size', 10)

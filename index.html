@@ -1610,6 +1610,7 @@ svg#main-viz {
     <span class="legend-item" title="Closer to goal = more tokens invested">Distance = investment</span>
     <span class="legend-item" title="Bigger nodes have used more tokens">Size = workload</span>
     <span class="legend-item" title="Faster particles = higher token throughput">Speed = throughput</span>
+    <span class="legend-item" title="Diamond pulse = system has been self-modifying (rules, skills, strategy)">&#9670; pulse = evolution</span>
   </div>
 </div>
 
@@ -2471,16 +2472,20 @@ svg#main-viz {
       .attr('opacity', d => d.target.isNew ? 0.9 : breathe);
     dLinks.exit().remove();
 
-    // Render synapse nodes
+    // Render synapse nodes — diamond shapes (distinct from agent circles)
+    function diamondPath(r) {
+      return `M0,${-r} L${r},0 L0,${r} L${-r},0 Z`;
+    }
+
     const sNodes = synapseTreeLayer.selectAll('.synapse-node').data(nodes, d => d.hash);
-    const sEnter = sNodes.enter().append('circle').attr('class', 'synapse-node')
-      .attr('r', 0)
+    const sEnter = sNodes.enter().append('path').attr('class', 'synapse-node')
+      .attr('d', diamondPath(0))
       .style('cursor', 'pointer')
       .on('mouseenter', function(event, d) {
         const tooltip = document.getElementById('tooltip');
         const typeLabel = d.type.charAt(0).toUpperCase() + d.type.slice(1);
         const isRecursive = ['rules', 'identity', 'review', 'strategy'].includes(d.type);
-        const prefix = isRecursive ? '\u21BA ' : ''; // ↺ for recursive
+        const prefix = isRecursive ? '\u21BA ' : '';
         tooltip.querySelector('.tt-message').textContent = prefix + (d.message || typeLabel + ' modification');
         const ageLabel = d.age < 1 ? 'today' : d.age < 7 ? Math.floor(d.age) + ' days ago' : Math.floor(d.age / 7) + ' weeks ago';
         const recursiveLabel = isRecursive ? 'Self-modification' : 'Knowledge gained';
@@ -2492,19 +2497,19 @@ svg#main-viz {
       .on('mouseleave', function() {
         document.getElementById('tooltip').classList.remove('visible');
       });
-    sEnter.transition().duration(800).attr('r', 4);
+    sEnter.transition().duration(800).attr('d', diamondPath(4));
 
     sEnter.merge(sNodes)
-      .attr('cx', d => d.x).attr('cy', d => d.y)
-      .attr('r', d => {
-        if (d.age < 1) return 6 + Math.sin(state.time * 0.1) * 2; // today: large, pulsing
-        if (d.age < 3) return 4.5 + Math.sin(state.time * 0.06) * 1; // recent: medium pulse
-        const ageFade = Math.max(0.5, 1 - d.age * 0.012);
-        return 2.5 + ageFade * 2;
+      .attr('transform', d => `translate(${d.x},${d.y})`)
+      .attr('d', d => {
+        let r;
+        if (d.age < 1) r = 6 + Math.sin(state.time * 0.1) * 2;
+        else if (d.age < 3) r = 4.5 + Math.sin(state.time * 0.06) * 1;
+        else { const ageFade = Math.max(0.5, 1 - d.age * 0.012); r = 2.5 + ageFade * 2; }
+        return diamondPath(r);
       })
       .attr('fill', d => {
         const c = SYNAPSE_COLORS[d.type] || SYNAPSE_COLORS.other;
-        // Fresh learning glows bright, old knowledge dims
         const freshGlow = d.age < 1 ? 0.95 : d.age < 3 ? 0.7 : d.age < 7 ? 0.5 : Math.max(0.1, 0.4 - d.age * 0.004);
         return c.glow + (freshGlow * treeBrightness) + ')';
       })
@@ -2515,7 +2520,6 @@ svg#main-viz {
       })
       .attr('stroke-width', d => d.age < 1 ? 2 : d.age < 3 ? 1 : 0)
       .attr('filter', d => {
-        // Glow halo for very fresh learning (< 1 day)
         if (d.age < 1) {
           const typeKey = Object.keys(PALETTE).find(k => PALETTE[k].base === (SYNAPSE_COLORS[d.type] || {}).base);
           return typeKey ? `url(#glow-${typeKey})` : 'none';
@@ -3738,6 +3742,31 @@ svg#main-viz {
 
     // Remove stale second ring if it exists
     agentTreeLayer.select('.health-heartbeat-2').remove();
+
+    // System evolution pulse — diamond-shaped expanding ring (distinct from circular heartbeat)
+    // Represents the system's accumulated self-modifications
+    const recentMods = state.synapses.filter(s => s.age < 7).length;
+    if (recentMods > 0) {
+      // Pulse speed based on learning velocity — more recent mods = faster pulse
+      const evoSpeed = 0.005 + Math.min(0.015, recentMods * 0.002);
+      const evoPhase = (state.time * evoSpeed) % 1;
+      const evoMaxR = Math.min(state.width, state.height) * 0.2;
+      const evoR = 30 + evoPhase * evoMaxR;
+      const evoOpacity = 0.06 * (1 - evoPhase);
+
+      let evoPulse = agentTreeLayer.select('.evo-pulse');
+      if (evoPulse.empty()) {
+        evoPulse = agentTreeLayer.append('path').attr('class', 'evo-pulse')
+          .attr('fill', 'none');
+      }
+      // Diamond shape: rotated square
+      evoPulse
+        .attr('d', `M${hbCx},${hbCy - evoR} L${hbCx + evoR},${hbCy} L${hbCx},${hbCy + evoR} L${hbCx - evoR},${hbCy} Z`)
+        .attr('stroke', `rgba(167,139,250,${evoOpacity})`)
+        .attr('stroke-width', 0.8 * (1 - evoPhase));
+    } else {
+      agentTreeLayer.select('.evo-pulse').remove();
+    }
 
     // Rate limit / rest mode indicator — dashed constraint ring
     let modeRing = agentTreeLayer.select('.mode-indicator-ring');
@@ -5525,7 +5554,7 @@ Auth: tokens refreshed, no anomalies`;
     updatePhysics();
     render();
     renderAgentTree();
-    renderSynapseTree();
+    // Synapse tree removed — self-modification now shown as indicators on agent nodes
     // Documents removed from canvas — position didn't encode information
 
     // Update sparkline every ~60 frames (~1 second)

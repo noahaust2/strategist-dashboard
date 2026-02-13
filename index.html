@@ -1607,7 +1607,7 @@ svg#main-viz {
     <span class="legend-item" title="Node outline color matches assigned goal">Color = goal</span>
     <span class="legend-item" title="Rotating purple arc = reading/searching">Scan = research</span>
     <span class="legend-item" title="Nodes breathe faster when active">Breathing = activity</span>
-    <span class="legend-item" title="Closer to goal = more tokens invested">Distance = investment</span>
+    <span class="legend-item" title="Tighter pull to goal = more focused on that goal">Pull = focus</span>
     <span class="legend-item" title="Bigger nodes have used more tokens">Size = workload</span>
     <span class="legend-item" title="Faster particles = higher token throughput">Speed = throughput</span>
     <span class="legend-item" title="Violet dots orbiting inside node = reasoning steps">Inner dots = reasoning</span>
@@ -3615,10 +3615,11 @@ svg#main-viz {
       fy += (a._baseY - a.y) * anchorStr;
 
       // Force 2: Pull toward goal colony (weighted by token investment)
+      // Force 2: Pull toward goal colony — strength = focus (how dedicated to this goal)
       if (a.goalId && state.colonies.has(a.goalId)) {
         const colony = state.colonies.get(a.goalId);
-        const tokenPull = a.tokens ? Math.min(0.04, Math.sqrt(a.tokens.total / 50000) * 0.03) : 0;
-        const goalStr = (a.status === 'active' ? 0.015 : 0.005) + tokenPull;
+        const focus = typeof a.focus === 'number' ? a.focus : 0.7; // 0-1, default 0.7
+        const goalStr = (a.status === 'active' ? 0.008 : 0.003) + focus * 0.04;
         fx += (colony.cx - a.x) * goalStr;
         fy += (colony.cy - a.y) * goalStr;
       }
@@ -5175,6 +5176,7 @@ Auth: tokens refreshed, no anomalies`;
         { phase: 'EXECUTE', text: 'Spawning Content Writer for blog post, Research Scout for tomorrow\'s topics', status: 'done', time: fmt(45) },
         { phase: 'EXECUTE', text: 'Monitoring teammates — both active and producing output', status: 'active', time: fmt(5) },
       ],
+      focus: 0.2, // coordinates across all goals — low focus on any single one
       nodeRadius: 30,
     });
     state.agents.set('content-writer', {
@@ -5189,6 +5191,7 @@ Auth: tokens refreshed, no anomalies`;
         { phase: 'EXECUTE', text: 'Spawned Blog Drafter for intro, SEO Optimizer for keyword pass', status: 'done', time: fmt(40) },
         { phase: 'EXECUTE', text: 'Editing draft — weaving in Research Scout findings', status: 'active', time: fmt(8) },
       ],
+      focus: 0.85, // dedicated to audience growth content
       nodeRadius: 22,
     });
     state.agents.set('blog-drafter', {
@@ -5197,6 +5200,7 @@ Auth: tokens refreshed, no anomalies`;
       currentAction: 'Writing intro section',
       tokens: { input: 6000, output: 3200, total: 9200 },
       recentTools: ['Read: draft-post.md', 'Write: intro-section.md', 'Edit: intro-section.md'],
+      focus: 1.0, // 100% focused on this one blog post
       nodeRadius: 16,
     });
     state.agents.set('seo-optimizer', {
@@ -5205,6 +5209,7 @@ Auth: tokens refreshed, no anomalies`;
       currentAction: 'Analyzing keyword density',
       tokens: { input: 4800, output: 1600, total: 6400 },
       recentTools: ['Grep: keyword density', 'Read: seo-config.json', 'Grep: meta tags'],
+      focus: 0.95, // nearly all attention on SEO for this goal
       nodeRadius: 16,
     });
     state.agents.set('research-scout', {
@@ -5219,6 +5224,7 @@ Auth: tokens refreshed, no anomalies`;
         { phase: 'EXECUTE', text: 'Spawned Deep Researcher for arxiv papers, Trend Analyzer for API data', status: 'done', time: fmt(58) },
         { phase: 'EXECUTE', text: 'Synthesizing findings from both sub-agents into report', status: 'active', time: fmt(12) },
       ],
+      focus: 0.6, // mostly research but findings feed other goals too
       nodeRadius: 22,
     });
     state.agents.set('deep-researcher', {
@@ -5231,6 +5237,7 @@ Auth: tokens refreshed, no anomalies`;
         { phase: 'READ', text: 'Found 3 relevant papers on vector embeddings for content recommendation', status: 'done', time: fmt(52) },
         { phase: 'EXECUTE', text: 'Extracting key findings — hybrid sparse+dense retrieval shows 40% improvement', status: 'active', time: fmt(15) },
       ],
+      focus: 0.9, // deep dive on specific research topic
       nodeRadius: 16,
     });
     state.agents.set('trend-analyzer', {
@@ -5239,6 +5246,7 @@ Auth: tokens refreshed, no anomalies`;
       currentAction: 'Fetching trending topics API',
       tokens: { input: 5200, output: 1800, total: 7000 },
       recentTools: ['WebFetch: trends API', 'Grep: trending keywords'],
+      focus: 0.75, // trends feed research but also content
       nodeRadius: 16,
     });
     state.agents.set('code-engineer', {
@@ -5246,6 +5254,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'Edit', goalId: 'infrastructure',
       currentAction: 'Implementing RSS parser',
       tokens: { input: 18000, output: 9200, total: 27200 },
+      focus: 0.8, // building infra but RSS parser also serves content
       nodeRadius: 22,
     });
     state.agents.set('test-runner', {
@@ -5253,6 +5262,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'Bash', goalId: 'infrastructure',
       currentAction: 'Running integration tests',
       tokens: { input: 3200, output: 800, total: 4000 },
+      focus: 1.0, // purely testing infrastructure code
       nodeRadius: 16,
     });
     state.agents.set('data-analyst', {
@@ -5260,6 +5270,7 @@ Auth: tokens refreshed, no anomalies`;
       status: 'active', currentTool: 'Read', goalId: 'revenue',
       currentAction: 'Analyzing engagement metrics',
       tokens: { input: 11000, output: 3400, total: 14400 },
+      focus: 0.5, // metrics feed revenue decisions but also inform other goals
       nodeRadius: 22,
     });
 

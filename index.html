@@ -5646,7 +5646,7 @@ svg#main-viz {
           state.statusText = data.message || 'Stagnation detected';
           updateHealthUI();
           addFeedEntry('stagnation', data.message || 'Stagnation detected');
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       eventSource.addEventListener('heartbeat', (e) => {
@@ -5662,21 +5662,21 @@ svg#main-viz {
             addFeedEntry('heartbeat', 'Heartbeat received');
             state._lastHbFeed = Date.now();
           }
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       eventSource.addEventListener('git_activity', (e) => {
         try {
           const data = JSON.parse(e.data);
           handleGitActivity(data);
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       eventSource.addEventListener('daydream', (e) => {
         try {
           const data = JSON.parse(e.data);
           handleDaydream(data);
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       eventSource.addEventListener('opportunities', (e) => {
@@ -5687,7 +5687,7 @@ svg#main-viz {
           if (Array.isArray(sections) && sections.length > 0) {
             addFeedEntry('opportunity', 'Opportunities updated (' + sections.length + ' items)');
           }
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       eventSource.addEventListener('metrics', (e) => {
@@ -5696,7 +5696,7 @@ svg#main-viz {
           Object.assign(state.metrics, data);
           updateSidebarOverview();
           addFeedEntry('metrics', 'Metrics updated');
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       eventSource.addEventListener('state', (e) => {
@@ -5704,7 +5704,7 @@ svg#main-viz {
           const data = JSON.parse(e.data);
           document.getElementById('raw-state').textContent = data.content || JSON.stringify(data, null, 2);
           addFeedEntry('state', 'State file updated');
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       eventSource.addEventListener('log', (e) => {
@@ -5715,7 +5715,7 @@ svg#main-viz {
           if (entries.length > 0) {
             addFeedEntry('log', entries[0].text || entries[0].content || 'Log updated');
           }
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       eventSource.addEventListener('strategy', (e) => {
@@ -5723,7 +5723,7 @@ svg#main-viz {
           const data = JSON.parse(e.data);
           document.getElementById('raw-strategy').textContent = data.content || JSON.stringify(data, null, 2);
           addFeedEntry('strategy', 'Strategy updated');
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       eventSource.addEventListener('context_usage', (e) => {
@@ -5731,7 +5731,7 @@ svg#main-viz {
           const data = JSON.parse(e.data);
           Object.assign(state.context, data);
           updateContextMeter();
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       eventSource.addEventListener('agent_tree', (e) => {
@@ -5797,7 +5797,7 @@ svg#main-viz {
           }
           updateMissionStatus();
           addFeedEntry('agent_status', 'Agent tree updated (' + state.agents.size + ' agents)');
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       eventSource.addEventListener('daily_usage', (e) => {
@@ -5809,7 +5809,7 @@ svg#main-viz {
             el.textContent = t >= 1e6 ? (t / 1e6).toFixed(1) + 'M' : t >= 1e3 ? (t / 1e3).toFixed(0) + 'K' : String(t);
             el.title = `Input: ${(data.input/1e6).toFixed(2)}M | Output: ${(data.output/1e6).toFixed(2)}M | Sessions: ${data.sessions}`;
           }
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       eventSource.addEventListener('tool_call', (e) => {
@@ -5822,7 +5822,7 @@ svg#main-viz {
           }
           if (state.toolCalls.length > 30) state.toolCalls = state.toolCalls.slice(-25);
           updateToolCalls();
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       eventSource.addEventListener('thinking', (e) => {
@@ -5839,7 +5839,7 @@ svg#main-viz {
           updateThinkingPanel();
           updateThinkingTicker();
           updateMissionStatus();
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       // Goals & Assets file updates
@@ -5858,7 +5858,7 @@ svg#main-viz {
             layoutColonies();
           }
           updateSystemPanel();
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       eventSource.addEventListener('assets_full', (e) => {
@@ -5866,21 +5866,21 @@ svg#main-viz {
           const data = JSON.parse(e.data);
           if (data && typeof data === 'object') state.assetsData = data;
           updateSystemPanel();
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       eventSource.addEventListener('doc_change', (e) => {
         try {
           const data = JSON.parse(e.data);
           handleDocChange(data);
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       eventSource.addEventListener('doc_activity', (e) => {
         try {
           const activities = JSON.parse(e.data);
           handleDocActivity(activities);
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       });
 
       // Generic message handler
@@ -5890,7 +5890,7 @@ svg#main-viz {
           if (data.type) {
             handleGenericEvent(data);
           }
-        } catch(err) {}
+        } catch(err) { console.warn('SSE parse error:', err); }
       };
 
     } catch (err) {

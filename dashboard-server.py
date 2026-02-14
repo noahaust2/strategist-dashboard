@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from queue import Queue, Empty
 from socketserver import ThreadingMixIn
+from typing import Dict, List
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -110,7 +111,7 @@ class SSEBroadcaster:
     """Thread-safe broadcaster that fans out SSE events to connected clients."""
 
     def __init__(self):
-        self._clients: list[Queue] = []
+        self._clients: List[Queue] = []
         self._lock = threading.Lock()
 
     def subscribe(self) -> Queue:
@@ -209,7 +210,7 @@ def parse_metrics(path: str) -> dict:
     text = _read_file(path)
     if text is None:
         return {"sections": {}}
-    sections: dict[str, dict[str, str]] = {}
+    sections: Dict[str, Dict[str, str]] = {}
     current_section = "_default"
     for line in text.splitlines():
         if line.startswith("## "):
@@ -223,7 +224,7 @@ def parse_metrics(path: str) -> dict:
     return {"sections": sections}
 
 
-def parse_security_log(path: str) -> list[dict]:
+def parse_security_log(path: str) -> List[dict]:
     text = _read_file(path)
     if text is None:
         return []
@@ -236,7 +237,7 @@ def parse_security_log(path: str) -> list[dict]:
     return entries
 
 
-def parse_goals(path: str) -> list[dict]:
+def parse_goals(path: str) -> List[dict]:
     text = _read_file(path)
     if text is None:
         return []
@@ -249,7 +250,7 @@ def parse_goals(path: str) -> list[dict]:
     return goals
 
 
-def parse_goals_full(path: str) -> list[dict]:
+def parse_goals_full(path: str) -> List[dict]:
     """Parse GOALS.md returning goal names with full text blocks."""
     text = _read_file(path)
     if text is None:
@@ -272,12 +273,12 @@ def parse_goals_full(path: str) -> list[dict]:
     return goals
 
 
-def parse_assets(path: str) -> dict[str, list[str]]:
+def parse_assets(path: str) -> Dict[str, List[str]]:
     """Parse ASSETS.md returning categorized asset items."""
     text = _read_file(path)
     if text is None:
         return {}
-    categories: dict[str, list[str]] = {}
+    categories: Dict[str, List[str]] = {}
     current_cat = "_general"
     for line in text.splitlines():
         if line.startswith("## "):
@@ -293,7 +294,7 @@ def parse_assets(path: str) -> dict[str, list[str]]:
     return categories
 
 
-def get_document_metadata() -> dict[str, dict]:
+def get_document_metadata() -> Dict[str, dict]:
     """Stat all planning files and return metadata."""
     planning_dir = os.path.join(PROJECT_DIR, ".planning")
     files_to_check = [
@@ -432,7 +433,7 @@ def get_full_document_map() -> dict:
     return {"documents": docs, "relationships": relationships}
 
 
-def get_synapse_history() -> list[dict]:
+def get_synapse_history() -> List[dict]:
     """Extract self-modification commits from git log (learning events)."""
     try:
         result = subprocess.run(
@@ -1051,7 +1052,7 @@ def _read_watched_file(path: str, event_type: str):
 
 def file_watcher():
     """Poll watched files every FILE_POLL_INTERVAL seconds, broadcast on change."""
-    mtimes: dict[str, float] = {}
+    mtimes: Dict[str, float] = {}
     while True:
         for path, event_type in WATCHED_FILES.items():
             try:
@@ -1163,8 +1164,8 @@ def refresh_git_data():
 
     commits = []
     synapses = []
-    goal_dist: dict[str, int] = defaultdict(int)
-    daily: dict[str, int] = defaultdict(int)
+    goal_dist: Dict[str, int] = defaultdict(int)
+    daily: Dict[str, int] = defaultdict(int)
 
     for line in raw.splitlines():
         parts = line.split("|", 2)
@@ -1295,8 +1296,8 @@ def git_poller():
 # ── Daydream graph builder ───────────────────────────────────────────────────
 
 def build_daydream_graph() -> dict:
-    nodes: list[dict] = []
-    links: list[dict] = []
+    nodes: List[dict] = []
+    links: List[dict] = []
     node_ids: set[str] = set()
 
     # Parse research/INDEX.md → research item nodes

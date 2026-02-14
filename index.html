@@ -3718,6 +3718,18 @@ svg#main-viz {
     });
   });
 
+  // Close commit detail when clicking empty canvas
+  document.getElementById('canvas-container').addEventListener('click', (e) => {
+    if (state.sidebarOpen && state.activePanel === 'commit') {
+      document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('active'));
+      state.sidebarOpen = false;
+      state.activePanel = null;
+      state.activeCommitHash = null;
+      document.getElementById('sidebar').classList.remove('open');
+    }
+  });
+
   function openSidebarPanel(panelName) {
     document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('active'));

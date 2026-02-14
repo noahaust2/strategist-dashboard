@@ -1208,6 +1208,70 @@ def refresh_git_data():
         git_cache.update(data)
 
 
+def get_commit_detail(short_hash: str) -> dict:
+    """Get detailed info for a single commit: full message, diff stats, changed files."""
+    import re as _re
+    # Sanitize hash input (only allow hex chars)
+    clean = _re.sub(r'[^0-9a-fA-F]', '', short_hash)[:40]
+    if not clean:
+        return {"error": "invalid hash"}
+    try:
+        # Get full commit info + diff stat
+        result = subprocess.run(
+            ["git", "show", "--stat", "--format=%H%n%aI%n%an%n%B", clean],
+            capture_output=True, text=True, timeout=10,
+            cwd=PROJECT_DIR,
+        )
+        if result.returncode != 0:
+            return {"error": "commit not found"}
+        lines = result.stdout.strip().split("\n")
+        if len(lines) < 4:
+            return {"error": "unexpected format"}
+
+        full_hash = lines[0]
+        date = lines[1]
+        author = lines[2]
+        # Body is everything until the diff stat section
+        # Diff stat starts with lines like " file | N ++" and ends with "N files changed..."
+        body_lines = []
+        stat_lines = []
+        in_stat = False
+        for line in lines[3:]:
+            if not in_stat and ("|" in line and ("+" in line or "-" in line or "Bin" in line)):
+                in_stat = True
+            if in_stat:
+                stat_lines.append(line)
+            else:
+                body_lines.append(line)
+        body = "\n".join(body_lines).strip()
+
+        # Parse changed files from stat
+        files = []
+        summary = ""
+        for sl in stat_lines:
+            sl = sl.strip()
+            if "|" in sl:
+                parts = sl.split("|", 1)
+                fname = parts[0].strip()
+                changes = parts[1].strip() if len(parts) > 1 else ""
+                files.append({"name": fname, "changes": changes})
+            elif "changed" in sl:
+                summary = sl
+
+        return {
+            "hash": full_hash[:8],
+            "fullHash": full_hash,
+            "date": date,
+            "author": author,
+            "subject": body.split("\n")[0] if body else "",
+            "body": body,
+            "files": files,
+            "summary": summary,
+        }
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return {"error": "git error"}
+
+
 def git_poller():
     """Refresh git data every GIT_REFRESH_INTERVAL seconds."""
     while True:
@@ -1359,6 +1423,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/documents":
             self._send_json(get_full_document_map())
+
+        elif path.startswith("/api/commit/"):
+            commit_hash = path.split("/api/commit/")[1]
+            self._send_json(get_commit_detail(commit_hash))
 
         elif path == "/api/stream":
             self._handle_sse()

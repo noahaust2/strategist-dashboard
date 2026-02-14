@@ -1703,6 +1703,151 @@ svg#main-viz {
 
 #help-btn:hover { background: var(--bg-card); color: var(--text-secondary); border-color: var(--border-active); }
 
+/* Timelapse button */
+#timelapse-btn {
+  position: fixed;
+  bottom: 16px; right: 52px;
+  z-index: 100;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+#timelapse-btn:hover { background: var(--bg-card); color: var(--accent-cyan); border-color: var(--border-active); }
+
+/* Timelapse overlay */
+#timelapse-overlay {
+  position: fixed; inset: 0;
+  z-index: 600;
+  background: rgba(0,0,0,0.92);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+#timelapse-overlay.active { display: flex; }
+
+#timelapse-close {
+  position: absolute; top: 16px; right: 20px;
+  background: none; border: none;
+  color: var(--text-secondary);
+  font-size: 24px; cursor: pointer;
+  z-index: 610;
+}
+#timelapse-close:hover { color: var(--text-primary); }
+
+#timelapse-image-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  overflow: hidden;
+  padding: 40px 20px 20px;
+}
+
+#timelapse-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 4px 30px rgba(0,0,0,0.6);
+}
+
+#timelapse-empty {
+  color: var(--text-muted);
+  font-size: 14px;
+  font-family: var(--font-sans);
+  text-align: center;
+  line-height: 1.6;
+}
+
+#timelapse-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px 24px;
+  width: 100%;
+  max-width: 900px;
+}
+
+#timelapse-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: var(--border-subtle);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+#timelapse-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(34,211,238,0.4);
+}
+#timelapse-slider::-moz-range-thumb {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  cursor: pointer;
+  border: none;
+}
+
+#timelapse-date {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent-cyan);
+  min-width: 90px;
+  text-align: center;
+}
+
+#timelapse-nav {
+  display: flex; gap: 6px;
+}
+#timelapse-nav button {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 16px;
+  width: 32px; height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+#timelapse-nav button:hover { background: var(--bg-card); color: var(--text-primary); border-color: var(--border-active); }
+
+#timelapse-play {
+  background: var(--bg-tertiary) !important;
+  border: 1px solid var(--border-subtle) !important;
+  color: var(--text-secondary) !important;
+  font-size: 14px !important;
+  width: 36px !important; height: 32px !important;
+  border-radius: 6px !important;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+#timelapse-play:hover { background: var(--bg-card) !important; color: var(--accent-cyan) !important; }
+#timelapse-play.playing { color: var(--accent-cyan) !important; border-color: var(--accent-cyan) !important; }
+
+#timelapse-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  min-width: 60px;
+  text-align: right;
+}
+
 /* ── Persistent Legend ─────────────────────────────────── */
 #legend {
   display: flex;
@@ -1934,6 +2079,28 @@ svg#main-viz {
 
 <!-- Help button -->
 <button id="help-btn" title="How to read this dashboard">?</button>
+
+<!-- Timelapse button -->
+<button id="timelapse-btn" title="View dashboard timelapse">&#9654;</button>
+
+<!-- Timelapse overlay -->
+<div id="timelapse-overlay">
+  <button id="timelapse-close">&times;</button>
+  <div id="timelapse-image-container">
+    <img id="timelapse-image" style="display:none" alt="Dashboard snapshot">
+    <div id="timelapse-empty">No snapshots yet.<br>Snapshots are captured daily and will appear here.</div>
+  </div>
+  <div id="timelapse-controls">
+    <div id="timelapse-nav">
+      <button id="timelapse-prev" title="Previous day">&larr;</button>
+      <button id="timelapse-play" title="Play/pause timelapse">&#9654;</button>
+      <button id="timelapse-next" title="Next day">&rarr;</button>
+    </div>
+    <input type="range" id="timelapse-slider" min="0" max="0" value="0" step="1">
+    <span id="timelapse-date">--</span>
+    <span id="timelapse-count"></span>
+  </div>
+</div>
 
 <!-- View toggle -->
 <div id="view-toggle">
@@ -2467,6 +2634,18 @@ svg#main-viz {
 
   svg.call(zoomBehavior);
 
+  // Dismiss sidebar when clicking on empty canvas
+  svg.on('click', function(event) {
+    if (state.sidebarOpen) {
+      document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('active'));
+      state.sidebarOpen = false;
+      state.activePanel = null;
+      state.activeCommitHash = null;
+      document.getElementById('sidebar').classList.remove('open');
+    }
+  });
+
   function updateZoomIndicator() {
     const el = document.getElementById('zoom-indicator');
     el.textContent = state.zoom.toFixed(1) + 'x';
@@ -2870,7 +3049,7 @@ svg#main-viz {
       .on('mouseleave', function() {
         document.getElementById('tooltip').classList.remove('visible');
       })
-      .on('click', function(event, d) { showCommitDetail(d); });
+      .on('click', function(event, d) { event.stopPropagation(); showCommitDetail(d); });
     sEnter.transition().duration(800).attr('d', diamondPath(4));
 
     sEnter.merge(sNodes)
@@ -3040,7 +3219,7 @@ svg#main-viz {
       .on('mouseleave', function() {
         document.getElementById('tooltip').classList.remove('visible');
       })
-      .on('click', function(event, d) { openSidebarPanel('raw'); });
+      .on('click', function(event, d) { event.stopPropagation(); openSidebarPanel('raw'); });
 
     // Document shape: small rectangle with folded corner (not circle — avoids confusion with agents)
     entering.append('rect').attr('class', 'doc-page');
@@ -3252,6 +3431,7 @@ svg#main-viz {
         document.getElementById('tooltip').classList.remove('visible');
       })
       .on('click', function(event, d) {
+        event.stopPropagation();
         openSidebarPanel('goals');
       })
       .merge(colonyHalos)
@@ -3326,7 +3506,7 @@ svg#main-viz {
       .on('mouseenter', function(event, d) { showTooltip(event, d); })
       .on('mousemove', function(event, d) { moveTooltip(event); })
       .on('mouseleave', function() { hideTooltip(); })
-      .on('click', function(event, d) { showCommitDetail(d.commit); });
+      .on('click', function(event, d) { event.stopPropagation(); showCommitDetail(d.commit); });
 
     // Invisible hit area (larger than visual circle for easier hover)
     entering.append('circle')
@@ -4501,7 +4681,7 @@ svg#main-viz {
       .each(d => { d._enterTime = state.time; })
       .on('mouseenter', function(event, d) { showAgentDetail(d, event); })
       .on('mouseleave', function() { hideAgentDetail(); })
-      .on('click', function(event, d) { openSidebarPanel('process'); });
+      .on('click', function(event, d) { event.stopPropagation(); openSidebarPanel('process'); });
     entering.append('circle').attr('class', 'agent-node-bg');
     entering.append('path').attr('class', 'agent-mode-arc').attr('fill', 'none');
     entering.append('circle').attr('class', 'agent-node-ring');
@@ -6521,6 +6701,37 @@ Auth: tokens refreshed, no anomalies`;
     // Update sparkline every ~60 frames (~1 second)
     if (state.time % 60 === 0) updateGrowthSparkline();
   }
+
+  // ----------------------------------------------------------
+  // Fix: hover overlays stop working after clicking away from
+  // browser and back. D3 zoom gesture can get stuck in active
+  // state when the window loses focus (missing pointerup).
+  // Re-applying the current transform resets D3's internal
+  // gesture tracking via its public API.
+  // ----------------------------------------------------------
+  function resetZoomGesture() {
+    const t = d3.zoomTransform(svg.node());
+    // Suppress the zoom indicator flash by temporarily detaching the handler
+    const origHandler = zoomBehavior.on('zoom');
+    zoomBehavior.on('zoom', (event) => {
+      state.zoom = event.transform.k;
+      state.pan.x = event.transform.x;
+      state.pan.y = event.transform.y;
+      zoomGroup.attr('transform', event.transform);
+      // Skip updateZoomIndicator on this synthetic call
+    });
+    svg.call(zoomBehavior.transform, t);
+    zoomBehavior.on('zoom', origHandler);
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) resetZoomGesture();
+  });
+
+  window.addEventListener('focus', () => {
+    // Also handle alt-tab focus changes that don't fire visibilitychange
+    resetZoomGesture();
+  });
 
   // ----------------------------------------------------------
   // Responsive

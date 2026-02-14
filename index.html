@@ -2690,8 +2690,8 @@ svg#main-viz {
       const canvasCx = state.width / 2;
       const canvasCy = state.height / 2;
       const toCenter = Math.atan2(canvasCy - colony.cy, canvasCx - colony.cx);
-      // Spread angle: older commits use full circle, newer fan out toward center
-      const spread = Math.PI * (0.4 + ageFrac * 0.6); // newest: ±0.4π, oldest: ±π
+      // Spread angle: newer commits fan narrowly toward canvas center, older spread wider
+      const spread = Math.PI * (0.25 + ageFrac * 0.75); // newest: ±0.25π, oldest: ±π
       const angle = toCenter + (Math.random() - 0.5) * spread * 2;
       const dist = this.targetDist * (0.8 + Math.random() * 0.4);
       this.x = colony.cx + Math.cos(angle) * dist;
@@ -2792,6 +2792,7 @@ svg#main-viz {
         }
 
         // Age-based target position: recalculate with current colony radius
+        // Older commits stay close to colony center, newer grow outward toward canvas center
         const ageFrac = Math.min(1, p.age / 60);
         const curTargetDist = effectiveRadius * (0.05 + (1 - ageFrac) * 0.65);
         const targetX = colony.cx + growDx * curTargetDist;
@@ -2799,10 +2800,11 @@ svg#main-viz {
         const tdx = targetX - p.x;
         const tdy = targetY - p.y;
         const tDist = Math.sqrt(tdx * tdx + tdy * tdy);
-        // Gentle pull toward age-appropriate position
+        // Stronger pull toward age-appropriate radial position
         if (tDist > 2) {
-          p.vx += (tdx / tDist) * 0.012;
-          p.vy += (tdy / tDist) * 0.012;
+          const ageStr = 0.025 + (1 - ageFrac) * 0.015; // newer commits pulled harder outward
+          p.vx += (tdx / tDist) * ageStr;
+          p.vy += (tdy / tDist) * ageStr;
         }
 
         // Gentle orbital drift

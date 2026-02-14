@@ -1278,10 +1278,10 @@ def get_commit_detail(short_hash: str) -> dict:
             "summary": summary,
         }
     except subprocess.TimeoutExpired:
-        print(f"Warning: git show timed out after 15s for commit {commit_hash}")
+        print(f"Warning: git show timed out after 15s for commit {short_hash}")
         return {"error": "git timeout"}
     except (subprocess.SubprocessError, FileNotFoundError) as e:
-        print(f"Warning: git show failed for {commit_hash}: {e}")
+        print(f"Warning: git show failed for {short_hash}: {e}")
         return {"error": "git error"}
 
 

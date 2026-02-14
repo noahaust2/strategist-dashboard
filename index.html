@@ -2678,16 +2678,28 @@ svg#main-viz {
       this.id = commit.hash || commit.id || Math.random().toString(36).slice(2);
       this.commit = commit;
       this.colony = colony;
-      const angle = Math.random() * Math.PI * 2;
-      const dist = Math.random() * colony.radius * 0.7;
+      this.age = commit.age || 0;
+      this.brightness = Math.max(0.3, 1 - this.age * 0.01);
+
+      // Age-based positioning: older commits near colony center,
+      // newer commits grow outward toward canvas center
+      const ageFrac = Math.min(1, this.age / 60); // 0 = newest, 1 = oldest
+      // Target distance: newest at ~70% of radius, oldest at ~5%
+      this.targetDist = colony.radius * (0.05 + (1 - ageFrac) * 0.65);
+      // Direction: bias toward canvas center (inward on the ring)
+      const canvasCx = state.width / 2;
+      const canvasCy = state.height / 2;
+      const toCenter = Math.atan2(canvasCy - colony.cy, canvasCx - colony.cx);
+      // Spread angle: older commits use full circle, newer fan out toward center
+      const spread = Math.PI * (0.4 + ageFrac * 0.6); // newest: ±0.4π, oldest: ±π
+      const angle = toCenter + (Math.random() - 0.5) * spread * 2;
+      const dist = this.targetDist * (0.8 + Math.random() * 0.4);
       this.x = colony.cx + Math.cos(angle) * dist;
       this.y = colony.cy + Math.sin(angle) * dist;
       this.vx = (Math.random() - 0.5) * 0.3;
       this.vy = (Math.random() - 0.5) * 0.3;
       this.baseRadius = Math.min(8, 2.5 + (commit.filesChanged || 1) * 0.8);
       this.radius = this.baseRadius;
-      this.age = commit.age || 0;
-      this.brightness = Math.max(0.3, 1 - this.age * 0.01);
       this.type = commit.type || 'chore';
       this.isActive = commit.isActive || false;
       this.phase = Math.random() * Math.PI * 2;
@@ -2760,15 +2772,37 @@ svg#main-viz {
       const breath = Math.sin(colony.breathPhase) * 0.04;
       const effectiveRadius = colony.radius * (1 + breath);
 
+      // Direction from colony center toward canvas center (growth direction)
+      const canvasCx = state.width / 2;
+      const canvasCy = state.height / 2;
+      const toCenterAngle = Math.atan2(canvasCy - colony.cy, canvasCx - colony.cx);
+      const growDx = Math.cos(toCenterAngle);
+      const growDy = Math.sin(toCenterAngle);
+
       colony.particles.forEach(p => {
-        // Attract toward colony center
+        // Distance from colony center
         const dx = colony.cx - p.x;
         const dy = colony.cy - p.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
+        // Hard boundary: pull back if beyond colony radius
         if (dist > effectiveRadius) {
           p.vx += (dx / dist) * 0.05;
           p.vy += (dy / dist) * 0.05;
+        }
+
+        // Age-based target position: recalculate with current colony radius
+        const ageFrac = Math.min(1, p.age / 60);
+        const curTargetDist = effectiveRadius * (0.05 + (1 - ageFrac) * 0.65);
+        const targetX = colony.cx + growDx * curTargetDist;
+        const targetY = colony.cy + growDy * curTargetDist;
+        const tdx = targetX - p.x;
+        const tdy = targetY - p.y;
+        const tDist = Math.sqrt(tdx * tdx + tdy * tdy);
+        // Gentle pull toward age-appropriate position
+        if (tDist > 2) {
+          p.vx += (tdx / tDist) * 0.012;
+          p.vy += (tdy / tDist) * 0.012;
         }
 
         // Gentle orbital drift
@@ -5905,6 +5939,24 @@ svg#main-viz {
   function handleGitActivity(data) {
     const commits = Array.isArray(data) ? data : data.commits || [data];
     const colonyArr = Array.from(state.colonies.values());
+
+    // Compute age from date field if present (commits arrive newest-first)
+    const now = Date.now();
+    let maxAge = 1;
+    commits.forEach(c => {
+      if (c.date && !c.age) {
+        const ms = now - new Date(c.date).getTime();
+        c._ageDays = Math.max(0, ms / 86400000);
+        if (c._ageDays > maxAge) maxAge = c._ageDays;
+      }
+    });
+    // Normalize to 0-60 scale (matching seed data range)
+    commits.forEach(c => {
+      if (c._ageDays !== undefined && !c.age) {
+        c.age = Math.round((c._ageDays / maxAge) * 60);
+      }
+    });
+
     commits.forEach((commit, i) => {
       const goalKey = commit.goalId || commit.goal;
       let colony = resolveColony(goalKey);

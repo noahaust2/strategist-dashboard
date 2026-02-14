@@ -7446,8 +7446,8 @@ Auth: tokens refreshed, no anomalies`;
   // Tooltip for links (reuses existing #tooltip)
   function showArchTooltip(event, title, detail) {
     const tt = document.getElementById('tooltip');
-    tt.innerHTML = `<div class="tt-message">${title}</div>` +
-      (detail ? `<div class="tt-meta">${detail}</div>` : '');
+    tt.innerHTML = `<div class="tt-message">${escapeHtml(title)}</div>` +
+      (detail ? `<div class="tt-meta">${escapeHtml(detail)}</div>` : '');
     tt.style.left = (event.clientX + 12) + 'px';
     tt.style.top = (event.clientY + 12) + 'px';
     tt.classList.add('visible');

@@ -147,7 +147,8 @@ def _read_file(path: str) -> str | None:
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             return f.read()
-    except OSError:
+    except OSError as e:
+        print(f"Warning: Could not read {path}: {e}")
         return None
 
 
@@ -440,7 +441,11 @@ def get_synapse_history() -> list[dict]:
             cwd=PROJECT_DIR,
         )
         raw = result.stdout.strip()
-    except (subprocess.SubprocessError, FileNotFoundError):
+    except subprocess.TimeoutExpired:
+        print("Warning: git log timed out after 15s in get_synapse_history")
+        return []
+    except (subprocess.SubprocessError, FileNotFoundError) as e:
+        print(f"Warning: git command failed in get_synapse_history: {e}")
         return []
 
     synapses = []
@@ -1149,7 +1154,11 @@ def refresh_git_data():
             cwd=PROJECT_DIR,
         )
         raw = result.stdout.strip()
-    except (subprocess.SubprocessError, FileNotFoundError):
+    except subprocess.TimeoutExpired:
+        print("Warning: git log timed out after 15s in git_poller")
+        raw = ""
+    except (subprocess.SubprocessError, FileNotFoundError) as e:
+        print(f"Warning: git command failed in git_poller: {e}")
         raw = ""
 
     commits = []
@@ -1268,7 +1277,11 @@ def get_commit_detail(short_hash: str) -> dict:
             "files": files,
             "summary": summary,
         }
-    except (subprocess.SubprocessError, FileNotFoundError):
+    except subprocess.TimeoutExpired:
+        print(f"Warning: git show timed out after 15s for commit {commit_hash}")
+        return {"error": "git timeout"}
+    except (subprocess.SubprocessError, FileNotFoundError) as e:
+        print(f"Warning: git show failed for {commit_hash}: {e}")
         return {"error": "git error"}
 
 

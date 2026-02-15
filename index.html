@@ -476,6 +476,49 @@ svg#main-viz {
   text-align: center;
 }
 
+/* Today's Summary (Process panel) */
+.summary-goal-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: rgba(74,158,255,0.15);
+  color: var(--accent-blue);
+}
+.summary-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.summary-list li {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  padding: 2px 0 2px 14px;
+  position: relative;
+}
+.summary-list li::before {
+  content: '\2022';
+  position: absolute;
+  left: 0;
+  color: var(--accent-green);
+}
+.summary-list.blockers li::before {
+  color: var(--health-yellow);
+}
+.summary-list.blockers li {
+  color: var(--accent-amber);
+}
+.summary-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
 /* Current task card */
 .task-card {
   background: var(--bg-card);
@@ -2310,7 +2353,16 @@ svg#main-viz {
 
   <!-- Process Panel (now default — merged with overview) -->
   <div class="sidebar-panel active" id="panel-process">
-    <div class="panel-header">Context Window</div>
+    <div class="panel-header">Today's Summary</div>
+    <div id="summary-container">
+      <div id="summary-cycle" style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">Loading summary...</div>
+      <div id="summary-goals" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>
+      <div id="summary-accomplishments" style="margin-bottom:10px;"></div>
+      <div id="summary-blockers" style="margin-bottom:10px;"></div>
+      <div id="summary-metrics-brief" style="font-size:11px;color:var(--text-muted);margin-bottom:4px;"></div>
+    </div>
+
+    <div class="panel-header" style="margin-top:16px;">Context Window</div>
     <div class="context-pct" id="ctx-pct">0%</div>
     <div class="context-bar-large" id="ctx-bar-large">
       <div class="ctx-segment ctx-system" id="ctx-lg-system"></div>
@@ -4044,6 +4096,112 @@ svg#main-viz {
       li.innerHTML = `<span class="alloc-dot" style="background:${PALETTE[colorKey].base}"></span>${escapeHtml(goal.name)}`;
       legend.appendChild(li);
     });
+  }
+
+  // ----------------------------------------------------------
+  // Today's Summary (Process panel)
+  // ----------------------------------------------------------
+  function fetchSummary() {
+    fetch(API_BASE + '/api/summary')
+      .then(r => r.json())
+      .then(data => renderSummary(data))
+      .catch(() => {
+        const el = document.getElementById('summary-cycle');
+        if (el) el.textContent = 'Summary unavailable (server not connected)';
+      });
+  }
+
+  function renderSummary(data) {
+    // Cycle info
+    const cycleEl = document.getElementById('summary-cycle');
+    if (cycleEl) {
+      const cycleText = data.currentCycle ? 'Cycle ' + data.currentCycle : '';
+      const statusText = data.currentStatus || '';
+      cycleEl.innerHTML = '';
+      if (cycleText) {
+        const span = document.createElement('span');
+        span.style.cssText = 'font-weight:600;color:var(--accent-cyan);margin-right:8px;';
+        span.textContent = cycleText;
+        cycleEl.appendChild(span);
+      }
+      if (statusText) {
+        const span = document.createElement('span');
+        span.textContent = statusText;
+        cycleEl.appendChild(span);
+      }
+      if (!cycleText && !statusText) {
+        cycleEl.textContent = 'No cycle data available yet';
+      }
+    }
+
+    // Active goals as badges
+    const goalsEl = document.getElementById('summary-goals');
+    if (goalsEl) {
+      goalsEl.innerHTML = '';
+      (data.activeGoals || []).forEach((g, i) => {
+        const badge = document.createElement('span');
+        badge.className = 'summary-goal-badge';
+        const colors = ['var(--accent-blue)', 'var(--accent-green)', 'var(--accent-amber)', 'var(--accent-cyan)', 'var(--accent-rose)'];
+        const bgColors = ['rgba(74,158,255,0.15)', 'rgba(52,211,153,0.15)', 'rgba(245,158,11,0.15)', 'rgba(34,211,238,0.15)', 'rgba(244,114,182,0.15)'];
+        badge.style.color = colors[i % colors.length];
+        badge.style.background = bgColors[i % bgColors.length];
+        badge.textContent = g;
+        goalsEl.appendChild(badge);
+      });
+    }
+
+    // Accomplishments
+    const accEl = document.getElementById('summary-accomplishments');
+    if (accEl) {
+      accEl.innerHTML = '';
+      const items = data.accomplishments || [];
+      if (items.length > 0) {
+        const label = document.createElement('div');
+        label.className = 'summary-section-label';
+        label.textContent = 'Accomplished';
+        accEl.appendChild(label);
+        const ul = document.createElement('ul');
+        ul.className = 'summary-list';
+        items.forEach(item => {
+          const li = document.createElement('li');
+          li.textContent = item;
+          ul.appendChild(li);
+        });
+        accEl.appendChild(ul);
+      }
+    }
+
+    // Blockers
+    const blockEl = document.getElementById('summary-blockers');
+    if (blockEl) {
+      blockEl.innerHTML = '';
+      const items = data.blockers || [];
+      if (items.length > 0) {
+        const label = document.createElement('div');
+        label.className = 'summary-section-label';
+        label.style.color = 'var(--health-yellow)';
+        label.textContent = 'Blockers';
+        blockEl.appendChild(label);
+        const ul = document.createElement('ul');
+        ul.className = 'summary-list blockers';
+        items.forEach(item => {
+          const li = document.createElement('li');
+          li.textContent = item;
+          ul.appendChild(li);
+        });
+        blockEl.appendChild(ul);
+      }
+    }
+
+    // Brief metrics
+    const metricsEl = document.getElementById('summary-metrics-brief');
+    if (metricsEl && data.metrics) {
+      const parts = [];
+      if (data.metrics.cycleCount) parts.push(data.metrics.cycleCount + ' cycles completed');
+      if (data.metrics.predictionCount) parts.push(data.metrics.predictionCount + ' predictions made');
+      if (data.metrics.accuracyRate && data.metrics.accuracyRate !== 'N/A') parts.push(data.metrics.accuracyRate + ' accuracy');
+      metricsEl.textContent = parts.join(' \u2022 ') || '';
+    }
   }
 
   // ----------------------------------------------------------
@@ -5844,6 +6002,8 @@ svg#main-viz {
           const data = JSON.parse(e.data);
           document.getElementById('raw-state').textContent = data.content || JSON.stringify(data, null, 2);
           addFeedEntry('state', 'State file updated');
+          // Refresh summary when state changes
+          fetchSummary();
         } catch(err) { console.warn('SSE parse error:', err); }
       });
 
@@ -5855,6 +6015,8 @@ svg#main-viz {
           if (entries.length > 0) {
             addFeedEntry('log', entries[0].text || entries[0].content || 'Log updated');
           }
+          // Refresh summary when log changes
+          fetchSummary();
         } catch(err) { console.warn('SSE parse error:', err); }
       });
 
@@ -8070,6 +8232,7 @@ Auth: tokens refreshed, no anomalies`;
       updateHealthUI();
       updateGoalsPanel();
       updateSystemPanel();
+      fetchSummary();
       fetchGlossary();
       requestAnimationFrame(animate);
       connectSSE();

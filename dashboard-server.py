@@ -320,6 +320,159 @@ def build_summary() -> dict:
     }
 
 
+GLOSSARY_TERMS = [
+    {
+        "name": "Cycle",
+        "short": "One complete loop of the agent's work process.",
+        "long": "A cycle is the fundamental unit of agent activity. Each cycle follows "
+                "the pattern READ, DECIDE, EXECUTE, VERIFY and then repeats. The agent "
+                "reads its current state, picks what to work on, does the work, and checks "
+                "the results before starting the next cycle.",
+    },
+    {
+        "name": "Phase (READ / DECIDE / EXEC / VERIFY)",
+        "short": "The four steps the agent goes through in every work cycle.",
+        "long": "READ: the agent reviews its goals, state, and recent history to "
+                "understand the current situation. DECIDE: it picks which goal and task "
+                "to work on next. EXECUTE: it carries out the chosen task. VERIFY: it "
+                "checks whether the task succeeded and records what happened.",
+    },
+    {
+        "name": "Reality Model",
+        "short": "The agent's internal understanding of how the world works.",
+        "long": "The reality model is a structured framework the agent uses to track "
+                "what it knows, how confident it is in that knowledge, and where gaps "
+                "exist. It helps the agent make better decisions by grounding actions "
+                "in evidence rather than assumptions.",
+    },
+    {
+        "name": "Direction Confidence",
+        "short": "How sure the agent is that it is working on the right thing.",
+        "long": "Direction confidence measures whether the agent believes its current "
+                "strategy is correct. High confidence means the agent has evidence that "
+                "its approach is working. Low confidence triggers more research and "
+                "exploration before committing to action.",
+    },
+    {
+        "name": "Conviction",
+        "short": "The strength of the agent's belief in a particular decision.",
+        "long": "Conviction reflects how strongly the agent stands behind a choice it "
+                "has made. High conviction decisions are acted on quickly; low conviction "
+                "decisions may be deferred or investigated further. Conviction is built "
+                "through evidence gathering and testing.",
+    },
+    {
+        "name": "Prediction",
+        "short": "A testable forecast the agent makes about what will happen.",
+        "long": "The agent makes explicit predictions about outcomes before taking "
+                "action. These predictions are later checked against reality to improve "
+                "the agent's decision-making accuracy over time. Tracking predictions "
+                "is how the agent learns from its mistakes.",
+    },
+    {
+        "name": "Calibration",
+        "short": "How accurate the agent's predictions are compared to what actually happened.",
+        "long": "Calibration measures the gap between what the agent expected and what "
+                "actually occurred. Well-calibrated agents make reliable forecasts. Poor "
+                "calibration triggers the agent to adjust its models and become more "
+                "careful in its estimates.",
+    },
+    {
+        "name": "Teammate",
+        "short": "A sub-agent spawned to handle a specific task in parallel.",
+        "long": "Teammates are temporary worker agents that the main Strategist agent "
+                "creates to handle specific tasks. They run alongside the main agent, "
+                "each focused on a single job, and report back when done. This allows "
+                "multiple tasks to progress simultaneously.",
+    },
+    {
+        "name": "HIT",
+        "short": "A successful connection between two different research areas.",
+        "long": "HIT stands for a cross-domain discovery where research in one area "
+                "unexpectedly helps another. During ideation, the agent looks for these "
+                "connections between goals. A high HIT rate means the agent is finding "
+                "valuable synergies across its work.",
+    },
+    {
+        "name": "SEED",
+        "short": "A small exploratory investigation into an unknown area.",
+        "long": "SEEDs are lightweight research tasks where the agent explores a topic "
+                "it does not yet understand well. They are low-commitment investigations "
+                "designed to build knowledge before making bigger decisions. Seeds may "
+                "grow into full tasks if they reveal something valuable.",
+    },
+    {
+        "name": "Ideation",
+        "short": "The creative process where the agent brainstorms new ideas and connections.",
+        "long": "During ideation, the agent deliberately explores new possibilities by "
+                "combining what it knows across different goals. It looks for unexpected "
+                "connections (HITs) and generates opportunities. Ideation is scheduled "
+                "regularly to prevent the agent from getting stuck in routine work.",
+    },
+    {
+        "name": "Failure Mode",
+        "short": "A known pattern of mistakes the agent has cataloged.",
+        "long": "Failure modes are documented patterns where the agent tends to make "
+                "errors. By cataloging these, the agent can recognize when it is about "
+                "to repeat a mistake and take corrective action. Each failure mode "
+                "includes the root cause and a specific fix.",
+    },
+    {
+        "name": "Self-Correction",
+        "short": "The agent's ability to recognize and fix its own mistakes.",
+        "long": "Self-correction is the process by which the agent detects errors in "
+                "its reasoning or output, documents what went wrong, and adjusts its "
+                "behavior to avoid the same mistake. It is tracked in the failure "
+                "catalog and feeds back into improved decision-making.",
+    },
+    {
+        "name": "Emergent Capability",
+        "short": "A new skill or behavior the agent developed on its own.",
+        "long": "Emergent capabilities are abilities the agent was not explicitly "
+                "programmed to have but developed through its work. They arise from "
+                "combining existing skills in novel ways. These are flagged for owner "
+                "review since they represent the agent evolving beyond its original design.",
+    },
+    {
+        "name": "Wake-up Trigger",
+        "short": "An external event that starts a new agent work cycle.",
+        "long": "Wake-up triggers are signals that prompt the agent to begin a new "
+                "cycle. These include scheduled timers, incoming Telegram messages from "
+                "the owner, or system events. The wrapper script manages these triggers "
+                "and launches the agent when one fires.",
+    },
+    {
+        "name": "Rate Budget",
+        "short": "The limit on how many API calls the agent can make per time period.",
+        "long": "The rate budget controls how quickly the agent consumes its allocated "
+                "API resources. The agent monitors its usage and slows down or switches "
+                "to cheaper models when approaching the limit. This prevents runaway "
+                "costs and ensures the agent can run continuously.",
+    },
+    {
+        "name": "Understanding Mode",
+        "short": "When the agent focuses on learning and research instead of taking action.",
+        "long": "In understanding mode, the agent prioritizes building knowledge over "
+                "producing output. It reads, researches, and asks questions rather than "
+                "making changes. This mode is used when the agent has low confidence "
+                "in a new domain and needs to learn before acting.",
+    },
+    {
+        "name": "Action Mode",
+        "short": "When the agent focuses on executing tasks and producing results.",
+        "long": "In action mode, the agent prioritizes getting work done. It writes "
+                "code, creates content, makes commits, and advances its goals. This "
+                "mode is used when the agent has high confidence and clear direction. "
+                "It is the counterpart to understanding mode.",
+    },
+]
+
+
+def get_glossary() -> List[dict]:
+    """Return the glossary terms sorted alphabetically."""
+    return sorted(GLOSSARY_TERMS, key=lambda t: t["name"].lower())
+
+
 def parse_security_log(path: str) -> List[dict]:
     text = _read_file(path)
     if text is None:
@@ -1533,6 +1686,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/summary":
             self._send_json(build_summary())
+
+        elif path == "/api/glossary":
+            self._send_json(get_glossary())
 
         elif path == "/api/documents":
             self._send_json(get_full_document_map())

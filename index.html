@@ -2229,39 +2229,39 @@ svg#main-viz {
 </div>
 
 <div id="hud-bar">
-  <div id="hud-health" title="System health — green: healthy, yellow: degraded, red: down">
+  <div id="hud-health" title="Shows whether the agent is running normally (green), has minor issues (yellow), or is down (red)">
     <div class="hud-dot" id="hud-health-dot"></div>
     <span class="hud-status-text" id="hud-status-text">Initializing...</span>
   </div>
-  <div id="hud-phase" title="Agent loop phase — READ → DECIDE → EXECUTE → VERIFY → REPEAT">
-    <div class="hud-phase-step pending" data-phase="read"></div>
-    <div class="hud-phase-step pending" data-phase="decide"></div>
-    <div class="hud-phase-step pending" data-phase="execute"></div>
-    <div class="hud-phase-step pending" data-phase="verify"></div>
+  <div id="hud-phase" title="Shows which step the agent is on in its work cycle: Reading context -> Making decisions -> Doing work -> Checking results">
+    <div class="hud-phase-step pending" data-phase="read" title="READ: Agent reviews its goals, state, and recent history"></div>
+    <div class="hud-phase-step pending" data-phase="decide" title="DECIDE: Agent picks which goal and task to work on next"></div>
+    <div class="hud-phase-step pending" data-phase="execute" title="EXECUTE: Agent carries out the chosen task"></div>
+    <div class="hud-phase-step pending" data-phase="verify" title="VERIFY: Agent checks whether the task succeeded"></div>
     <span class="hud-phase-label" id="hud-phase-label">--</span>
   </div>
-  <div id="hud-context" title="Context window usage — system / conversation / tools / thinking tokens">
+  <div id="hud-context" title="Shows how much of the agent's working memory is being used. When full, older context is compressed to make room.">
     <div class="context-bar">
-      <div class="ctx-segment ctx-system" id="ctx-system"></div>
-      <div class="ctx-segment ctx-conversation" id="ctx-conversation"></div>
-      <div class="ctx-segment ctx-tools" id="ctx-tools"></div>
-      <div class="ctx-segment ctx-thinking" id="ctx-thinking"></div>
+      <div class="ctx-segment ctx-system" id="ctx-system" title="System instructions and rules"></div>
+      <div class="ctx-segment ctx-conversation" id="ctx-conversation" title="Conversation history"></div>
+      <div class="ctx-segment ctx-tools" id="ctx-tools" title="Tool outputs (file reads, command results)"></div>
+      <div class="ctx-segment ctx-thinking" id="ctx-thinking" title="Agent's internal reasoning"></div>
     </div>
     <span class="context-label" id="ctx-label">0K / 200K</span>
   </div>
-  <div id="hud-growth" title="Knowledge growth — 14-day learning trend from self-modifications">
+  <div id="hud-growth" title="Knowledge growth: shows the trend of self-improvements over the last 14 days">
     <svg id="hud-sparkline" width="40" height="16" viewBox="0 0 40 16"></svg>
     <span id="hud-growth-label" class="hud-growth-label"></span>
   </div>
-  <div id="hud-task">
+  <div id="hud-task" title="The goal and task the agent is currently working on">
     <span class="hud-goal-badge" id="hud-goal-badge">Agent</span>
     <span class="hud-task-name" id="hud-task-name">Waiting for status...</span>
     <span class="hud-task-status" id="hud-task-status"></span>
   </div>
   <div id="hud-metrics">
-    <div class="hud-metric"><span class="hud-metric-value" id="hud-tasks">0</span><span class="hud-metric-label">Tasks/wk</span></div>
-    <div class="hud-metric"><span class="hud-metric-value" id="hud-usage">--</span><span class="hud-metric-label">Tokens today</span></div>
-    <div id="connection-status">
+    <div class="hud-metric" title="Number of completed tasks in the last 7 days"><span class="hud-metric-value" id="hud-tasks">0</span><span class="hud-metric-label">Tasks/wk</span></div>
+    <div class="hud-metric" title="Total API tokens consumed by the agent today"><span class="hud-metric-value" id="hud-usage">--</span><span class="hud-metric-label">Tokens today</span></div>
+    <div id="connection-status" title="Whether this dashboard is receiving live updates from the server">
       <div id="conn-dot" class="connecting"></div>
       <span id="conn-text">connecting</span>
     </div>

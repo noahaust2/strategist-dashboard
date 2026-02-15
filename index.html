@@ -1480,6 +1480,252 @@ svg#main-viz {
   margin-bottom: 4px;
 }
 
+/* === IMPROVEMENT 1: Metrics & Predictions Panel === */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.metrics-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+
+.metrics-card-value {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.metrics-card-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+
+.metrics-card-sublabel {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+
+.metrics-card.highlight {
+  border-color: var(--accent-green);
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.1);
+}
+
+.metrics-card.highlight .metrics-card-value {
+  color: var(--accent-green);
+}
+
+.metrics-card.warn {
+  border-color: var(--accent-amber);
+}
+
+.metrics-card.warn .metrics-card-value {
+  color: var(--accent-amber);
+}
+
+.prediction-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(42,42,58,0.5);
+  font-size: 12px;
+}
+
+.prediction-item:last-child { border-bottom: none; }
+
+.prediction-outcome {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.prediction-outcome.correct {
+  background: rgba(52,211,153,0.12);
+  color: var(--accent-green);
+}
+
+.prediction-outcome.incorrect {
+  background: rgba(239,68,68,0.12);
+  color: var(--health-red);
+}
+
+.prediction-outcome.pending {
+  background: rgba(74,158,255,0.12);
+  color: var(--accent-blue);
+}
+
+.prediction-text {
+  color: var(--text-secondary);
+  line-height: 1.4;
+  flex: 1;
+}
+
+.prediction-date {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Token trend chart */
+.token-chart-container {
+  margin: 8px 0 16px 0;
+  padding: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+.token-chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.token-chart-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.token-chart-total {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.token-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 60px;
+}
+
+.token-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.token-bar {
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent-blue);
+  opacity: 0.6;
+  transition: height 0.5s ease, opacity 0.3s;
+  min-height: 2px;
+}
+
+.token-bar.today {
+  background: var(--accent-cyan);
+  opacity: 1;
+}
+
+.token-bar-label {
+  font-size: 8px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* === IMPROVEMENT 2: Data Staleness Indicator === */
+#hud-freshness {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 0.3s, opacity 0.3s;
+}
+
+#hud-bar:hover #hud-freshness {
+  max-width: 150px;
+  opacity: 1;
+}
+
+.freshness-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--accent-green);
+}
+
+.freshness-dot.stale { background: var(--accent-amber); }
+.freshness-dot.very-stale { background: var(--health-red); }
+
+/* Process panel staleness banner */
+.staleness-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  margin-bottom: 12px;
+}
+
+.staleness-banner.fresh {
+  background: rgba(52,211,153,0.08);
+  border: 1px solid rgba(52,211,153,0.2);
+  color: var(--accent-green);
+}
+
+.staleness-banner.stale {
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.2);
+  color: var(--accent-amber);
+}
+
+.staleness-banner.very-stale {
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.2);
+  color: var(--health-red);
+}
+
+.staleness-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.staleness-banner.fresh .staleness-dot { background: var(--accent-green); }
+.staleness-banner.stale .staleness-dot { background: var(--accent-amber); }
+.staleness-banner.very-stale .staleness-dot { background: var(--health-red); }
+
 /* Mobile */
 @media (max-width: 768px) {
   #sidebar { width: 100vw; }
@@ -2240,6 +2486,10 @@ svg#main-viz {
     <div class="hud-phase-step pending" data-phase="verify" title="VERIFY: Agent checks whether the task succeeded"></div>
     <span class="hud-phase-label" id="hud-phase-label">--</span>
   </div>
+  <div id="hud-freshness" title="Shows when the dashboard last received data from the agent">
+    <div class="freshness-dot" id="freshness-dot"></div>
+    <span id="freshness-text">--</span>
+  </div>
   <div id="hud-context" title="Shows how much of the agent's working memory is being used. When full, older context is compressed to make room.">
     <div class="context-bar">
       <div class="ctx-segment ctx-system" id="ctx-system" title="System instructions and rules"></div>
@@ -2342,6 +2592,7 @@ svg#main-viz {
   <div class="sidebar-tab active" data-panel="process" title="Process &amp; Agents">&#9881;</div>
   <div class="sidebar-tab" data-panel="thinking" title="Thinking">&#9733;</div>
   <div class="sidebar-tab" data-panel="goals" title="Goals">&#9673;</div>
+  <div class="sidebar-tab" data-panel="metrics" title="Metrics &amp; Predictions">&#9650;</div>
   <div class="sidebar-tab" data-panel="system" title="System Architecture">&#9055;</div>
   <div class="sidebar-tab" data-panel="logs" title="Logs &amp; Alerts">&#9776;</div>
   <div class="sidebar-tab" data-panel="glossary" title="Glossary">&#63;</div>
@@ -2353,6 +2604,10 @@ svg#main-viz {
 
   <!-- Process Panel (now default — merged with overview) -->
   <div class="sidebar-panel active" id="panel-process">
+    <div id="staleness-banner" class="staleness-banner fresh" style="display:none;">
+      <div class="staleness-dot"></div>
+      <span id="staleness-text">Data is current</span>
+    </div>
     <div class="panel-header">Today's Summary</div>
     <div id="summary-container">
       <div id="summary-cycle" style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">Loading summary...</div>
@@ -2416,6 +2671,52 @@ svg#main-viz {
     <div class="number-cell" style="max-width:140px;">
       <div class="value" id="num-daydream">0%</div>
       <div class="label">Cross-Domain Hits</div>
+    </div>
+  </div>
+
+  <!-- Metrics & Predictions Panel -->
+  <div class="sidebar-panel" id="panel-metrics">
+    <div class="panel-header">Performance Metrics</div>
+    <div class="metrics-grid" id="metrics-kpi-grid">
+      <div class="metrics-card">
+        <div class="metrics-card-value" id="metrics-cycles">--</div>
+        <div class="metrics-card-label">Cycles</div>
+        <div class="metrics-card-sublabel">completed</div>
+      </div>
+      <div class="metrics-card">
+        <div class="metrics-card-value" id="metrics-tasks-wk">--</div>
+        <div class="metrics-card-label">Tasks/wk</div>
+        <div class="metrics-card-sublabel">last 7 days</div>
+      </div>
+      <div class="metrics-card highlight">
+        <div class="metrics-card-value" id="metrics-accuracy">--</div>
+        <div class="metrics-card-label">Accuracy</div>
+        <div class="metrics-card-sublabel">prediction hit rate</div>
+      </div>
+      <div class="metrics-card">
+        <div class="metrics-card-value" id="metrics-predictions">--</div>
+        <div class="metrics-card-label">Predictions</div>
+        <div class="metrics-card-sublabel">total made</div>
+      </div>
+    </div>
+
+    <div class="panel-header">Token Usage (7-day)</div>
+    <div class="token-chart-container" id="token-chart">
+      <div class="token-chart-header">
+        <span class="token-chart-title">Daily tokens</span>
+        <span class="token-chart-total" id="token-chart-today">--</span>
+      </div>
+      <div class="token-bars" id="token-bars"></div>
+    </div>
+
+    <div class="panel-header">Recent Predictions</div>
+    <div id="predictions-container">
+      <div style="font-size:12px;color:var(--text-muted);">No prediction data available</div>
+    </div>
+
+    <div class="panel-header" style="margin-top:16px;">Health Summary</div>
+    <div id="metrics-health-summary" style="font-size:12px;color:var(--text-secondary);line-height:1.6;">
+      Loading health data...
     </div>
   </div>
 
@@ -2594,6 +2895,14 @@ svg#main-viz {
     synapseSim: null,       // D3 force simulation for synapse layout
     reviewStatus: { sessionsSinceReview: 0, interval: 5 },
     daydreamSparks: [],     // Animated spark effects
+    // Metrics & Predictions (Improvement 1)
+    metricsData: { cycleCount: 0, predictionCount: 0, accuracyRate: 'N/A', tasksPerWeek: 0 },
+    predictions: [],         // [{text, outcome, date}]
+    // Token History (Improvement 3)
+    tokenHistory: [],        // [{date, total, input, output}] — last 7 days
+    // Data Staleness (Improvement 2)
+    lastDataReceived: null,  // Timestamp of last SSE/API data
+    lastDataSource: '',      // What type of data was last received
   };
 
   // ----------------------------------------------------------
@@ -4201,6 +4510,12 @@ svg#main-viz {
       if (data.metrics.predictionCount) parts.push(data.metrics.predictionCount + ' predictions made');
       if (data.metrics.accuracyRate && data.metrics.accuracyRate !== 'N/A') parts.push(data.metrics.accuracyRate + ' accuracy');
       metricsEl.textContent = parts.join(' \u2022 ') || '';
+
+      // Also update the Metrics panel with this data
+      if (data.metrics.cycleCount) state.metricsData.cycleCount = data.metrics.cycleCount;
+      if (data.metrics.predictionCount) state.metricsData.predictionCount = data.metrics.predictionCount;
+      if (data.metrics.accuracyRate) state.metricsData.accuracyRate = data.metrics.accuracyRate;
+      updateMetricsPanel();
     }
   }
 
@@ -4396,6 +4711,214 @@ svg#main-viz {
     const d = Math.floor(h / 24);
     return d + 'd ago';
   }
+
+  // ----------------------------------------------------------
+  // IMPROVEMENT 1: Metrics & Predictions Panel
+  // ----------------------------------------------------------
+  function updateMetricsPanel() {
+    const m = state.metricsData;
+
+    // KPI cards
+    const cyclesEl = document.getElementById('metrics-cycles');
+    if (cyclesEl) cyclesEl.textContent = m.cycleCount || '--';
+
+    const tasksEl = document.getElementById('metrics-tasks-wk');
+    if (tasksEl) tasksEl.textContent = state.metrics.tasksPerWeek || m.tasksPerWeek || '--';
+
+    const accEl = document.getElementById('metrics-accuracy');
+    if (accEl) {
+      accEl.textContent = m.accuracyRate && m.accuracyRate !== 'N/A' ? m.accuracyRate : '--';
+      // Color the card based on accuracy
+      const card = accEl.closest('.metrics-card');
+      if (card) {
+        card.className = 'metrics-card';
+        if (m.accuracyRate && m.accuracyRate !== 'N/A') {
+          const pct = parseFloat(m.accuracyRate);
+          if (!isNaN(pct)) {
+            if (pct >= 70) card.classList.add('highlight');
+            else if (pct < 50) card.classList.add('warn');
+          }
+        }
+      }
+    }
+
+    const predEl = document.getElementById('metrics-predictions');
+    if (predEl) predEl.textContent = m.predictionCount || '--';
+
+    // Predictions list
+    const container = document.getElementById('predictions-container');
+    if (container && state.predictions.length > 0) {
+      container.innerHTML = '';
+      state.predictions.slice(-10).reverse().forEach(p => {
+        const item = document.createElement('div');
+        item.className = 'prediction-item';
+        const outcomeClass = p.outcome === 'correct' ? 'correct' : p.outcome === 'incorrect' ? 'incorrect' : 'pending';
+        const outcomeLabel = p.outcome === 'correct' ? 'HIT' : p.outcome === 'incorrect' ? 'MISS' : 'PENDING';
+        item.innerHTML = `
+          <span class="prediction-outcome ${outcomeClass}">${outcomeLabel}</span>
+          <span class="prediction-text">${escapeHtml(p.text || '')}</span>
+          ${p.date ? '<span class="prediction-date">' + escapeHtml(p.date) + '</span>' : ''}
+        `;
+        container.appendChild(item);
+      });
+    } else if (container && state.predictions.length === 0) {
+      container.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">No prediction data available</div>';
+    }
+
+    // Health summary text
+    const healthEl = document.getElementById('metrics-health-summary');
+    if (healthEl) {
+      const parts = [];
+      if (state.health === 'green') parts.push('<span style="color:var(--accent-green);">System healthy</span>');
+      else if (state.health === 'yellow') parts.push('<span style="color:var(--accent-amber);">System degraded</span>');
+      else parts.push('<span style="color:var(--health-red);">System unhealthy</span>');
+
+      if (state.lastHeartbeat) {
+        const hbAge = Math.floor((Date.now() - new Date(state.lastHeartbeat).getTime()) / 1000);
+        if (hbAge < 120) parts.push('Heartbeat: ' + hbAge + 's ago');
+        else parts.push('Heartbeat: ' + timeAgo(new Date(state.lastHeartbeat)));
+      }
+
+      const total = (state.context.system || 0) + (state.context.conversation || 0) +
+                    (state.context.tools || 0) + (state.context.thinking || 0);
+      const ctxPct = Math.round(total / (state.context.max || 200000) * 100);
+      parts.push('Context: ' + ctxPct + '% used');
+
+      if (state.agents.size > 0) parts.push('Agents: ' + state.agents.size + ' active');
+
+      const growth = computeGrowthVitality();
+      parts.push('Growth: ' + growth.label);
+
+      healthEl.innerHTML = parts.join('<br>');
+    }
+  }
+
+  // ----------------------------------------------------------
+  // IMPROVEMENT 3: Token Usage Trend Chart
+  // ----------------------------------------------------------
+  function updateTokenChart() {
+    const bars = document.getElementById('token-bars');
+    const todayLabel = document.getElementById('token-chart-today');
+    if (!bars) return;
+
+    const history = state.tokenHistory;
+    if (history.length === 0) {
+      bars.innerHTML = '<div style="font-size:11px;color:var(--text-muted);width:100%;text-align:center;padding:16px 0;">No token data yet</div>';
+      if (todayLabel) todayLabel.textContent = '--';
+      return;
+    }
+
+    // Find max for scaling
+    const maxVal = Math.max(...history.map(h => h.total || 0), 1);
+
+    bars.innerHTML = '';
+    history.forEach((day, i) => {
+      const isToday = i === history.length - 1;
+      const heightPct = Math.max(3, (day.total / maxVal) * 100);
+
+      const col = document.createElement('div');
+      col.className = 'token-bar-col';
+
+      const bar = document.createElement('div');
+      bar.className = 'token-bar' + (isToday ? ' today' : '');
+      bar.style.height = heightPct + '%';
+      bar.title = (day.date || 'Day ' + (i + 1)) + ': ' + formatTokenCount(day.total);
+
+      const label = document.createElement('div');
+      label.className = 'token-bar-label';
+      // Show day abbreviation
+      if (day.date) {
+        const d = new Date(day.date);
+        label.textContent = ['Su','Mo','Tu','We','Th','Fr','Sa'][d.getDay()] || '';
+      } else {
+        label.textContent = isToday ? 'Now' : '';
+      }
+
+      col.appendChild(bar);
+      col.appendChild(label);
+      bars.appendChild(col);
+    });
+
+    // Update today's total
+    if (todayLabel && history.length > 0) {
+      const today = history[history.length - 1];
+      todayLabel.textContent = formatTokenCount(today.total) + ' today';
+    }
+  }
+
+  function formatTokenCount(n) {
+    if (typeof n !== 'number' || isNaN(n)) return '--';
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K';
+    return String(n);
+  }
+
+  // ----------------------------------------------------------
+  // IMPROVEMENT 2: Data Staleness Indicators
+  // ----------------------------------------------------------
+  function markDataReceived(source) {
+    state.lastDataReceived = Date.now();
+    state.lastDataSource = source || 'data';
+    updateFreshnessIndicator();
+  }
+
+  function updateFreshnessIndicator() {
+    const dot = document.getElementById('freshness-dot');
+    const text = document.getElementById('freshness-text');
+    const banner = document.getElementById('staleness-banner');
+    const bannerText = document.getElementById('staleness-text');
+
+    if (!state.lastDataReceived) {
+      if (text) text.textContent = 'no data';
+      if (dot) dot.className = 'freshness-dot very-stale';
+      if (banner) banner.style.display = 'none';
+      return;
+    }
+
+    const age = Date.now() - state.lastDataReceived;
+    const secs = Math.floor(age / 1000);
+    const mins = Math.floor(secs / 60);
+
+    let ageText, freshClass;
+    if (secs < 30) {
+      ageText = 'just now';
+      freshClass = 'fresh';
+    } else if (secs < 120) {
+      ageText = secs + 's ago';
+      freshClass = 'fresh';
+    } else if (mins < 10) {
+      ageText = mins + 'm ago';
+      freshClass = 'fresh';
+    } else if (mins < 30) {
+      ageText = mins + 'm ago';
+      freshClass = 'stale';
+    } else {
+      ageText = mins >= 60 ? Math.floor(mins / 60) + 'h ago' : mins + 'm ago';
+      freshClass = 'very-stale';
+    }
+
+    // HUD indicator
+    if (text) text.textContent = ageText;
+    if (dot) dot.className = 'freshness-dot' + (freshClass !== 'fresh' ? ' ' + freshClass : '');
+
+    // Process panel banner
+    if (banner) {
+      banner.className = 'staleness-banner ' + freshClass;
+      banner.style.display = 'flex';
+    }
+    if (bannerText) {
+      if (freshClass === 'fresh') {
+        bannerText.textContent = 'Data is current (' + ageText + ')';
+      } else if (freshClass === 'stale') {
+        bannerText.textContent = 'Data may be stale (' + ageText + ')';
+      } else {
+        bannerText.textContent = 'Data is outdated (' + ageText + ')';
+      }
+    }
+  }
+
+  // Periodically update freshness display (every 10 seconds)
+  setInterval(updateFreshnessIndicator, 10000);
 
   function renderDocFlowDiagram() {
     const svgEl = document.getElementById('docflow-svg');
@@ -5931,6 +6454,7 @@ svg#main-viz {
       eventSource.addEventListener('agent_status', (e) => {
         try {
           const data = JSON.parse(e.data);
+          markDataReceived('agent_status');
           handleAgentStatus(data);
           addFeedEntry('agent_status', 'Agent: ' + (data.status || modeLabel(data.mode || 'active')));
         } catch(err) { console.warn('SSE parse error:', err); }
@@ -5950,6 +6474,7 @@ svg#main-viz {
       eventSource.addEventListener('heartbeat', (e) => {
         try {
           const data = JSON.parse(e.data);
+          markDataReceived('heartbeat');
           state.lastHeartbeat = data.last || data.timestamp || new Date().toISOString();
           state._wrapperAlive = data.wrapperAlive !== undefined ? data.wrapperAlive : true;
           state._wrapperAge = data.wrapperAge || 0;
@@ -5991,7 +6516,13 @@ svg#main-viz {
       eventSource.addEventListener('metrics', (e) => {
         try {
           const data = JSON.parse(e.data);
+          markDataReceived('metrics');
           Object.assign(state.metrics, data);
+          // Update metrics panel data if present
+          if (data.cycleCount) state.metricsData.cycleCount = data.cycleCount;
+          if (data.predictionCount) state.metricsData.predictionCount = data.predictionCount;
+          if (data.accuracyRate) state.metricsData.accuracyRate = data.accuracyRate;
+          updateMetricsPanel();
           updateSidebarOverview();
           addFeedEntry('metrics', 'Metrics updated');
         } catch(err) { console.warn('SSE parse error:', err); }
@@ -6039,6 +6570,7 @@ svg#main-viz {
       eventSource.addEventListener('agent_tree', (e) => {
         try {
           const data = JSON.parse(e.data);
+          markDataReceived('agent_tree');
           if (data.agents) {
             // Mark live on first real agent data (prevents empty-state flash)
             if (!state.liveConnected) state.liveConnected = true;
@@ -6105,6 +6637,22 @@ svg#main-viz {
       eventSource.addEventListener('daily_usage', (e) => {
         try {
           const data = JSON.parse(e.data);
+          markDataReceived('daily_usage');
+          // Track token history for trend chart
+          if (typeof data.total === 'number') {
+            const today = new Date().toISOString().slice(0, 10);
+            const existing = state.tokenHistory.find(h => h.date === today);
+            if (existing) {
+              existing.total = data.total;
+              existing.input = data.input || 0;
+              existing.output = data.output || 0;
+            } else {
+              state.tokenHistory.push({ date: today, total: data.total, input: data.input || 0, output: data.output || 0 });
+              // Keep only last 7 days
+              if (state.tokenHistory.length > 7) state.tokenHistory = state.tokenHistory.slice(-7);
+            }
+            updateTokenChart();
+          }
           const el = document.getElementById('hud-usage');
           if (el && typeof data.total === 'number') {
             const t = data.total;
@@ -6358,11 +6906,22 @@ svg#main-viz {
     updateSidebarOverview();
     updateGoalsPanel();
     updateSystemPanel();
+    updateMetricsPanel();
+    updateTokenChart();
+    updateFreshnessIndicator();
     updateMissionStatus();
     updateThinkingTicker();
   }
 
   function handleStateResponse(data) {
+    markDataReceived('api_state');
+    // Extract metrics data for the Metrics panel
+    if (data.metrics) {
+      if (data.metrics.cycleCount) state.metricsData.cycleCount = data.metrics.cycleCount;
+      if (data.metrics.predictionCount) state.metricsData.predictionCount = data.metrics.predictionCount;
+      if (data.metrics.accuracyRate) state.metricsData.accuracyRate = data.metrics.accuracyRate;
+      if (data.metrics.tasksPerWeek) state.metricsData.tasksPerWeek = data.metrics.tasksPerWeek;
+    }
     // API returns goals_full (from WATCHED_FILES event type), not goals
     if (data.goals_full && Array.isArray(data.goals_full)) {
       state.goalsText = data.goals_full;
@@ -6834,6 +7393,49 @@ Auth: tokens refreshed, no anomalies`;
       });
     }
     initSynapseTree(demoSynapseCommits);
+
+    // IMPROVEMENT 1: Seed demo metrics data
+    state.metricsData = {
+      cycleCount: 47,
+      predictionCount: 23,
+      accuracyRate: '74%',
+      tasksPerWeek: 47,
+    };
+
+    state.predictions = [
+      { text: 'Blog post on AI applications will get 500+ views in first 24h', outcome: 'correct', date: '2026-02-12' },
+      { text: 'RSS parser implementation will take 2 cycles', outcome: 'correct', date: '2026-02-11' },
+      { text: 'Competitor analysis will reveal 3+ untapped niches', outcome: 'incorrect', date: '2026-02-11' },
+      { text: 'Content pipeline refactor will reduce processing time by 40%', outcome: 'correct', date: '2026-02-10' },
+      { text: 'Social media auto-posting will increase engagement by 25%', outcome: 'pending', date: '2026-02-12' },
+      { text: 'Infrastructure migration will complete without downtime', outcome: 'correct', date: '2026-02-09' },
+      { text: 'Vector embedding approach will outperform keyword search', outcome: 'pending', date: '2026-02-12' },
+      { text: 'A/B test on headlines will show >10% CTR improvement', outcome: 'incorrect', date: '2026-02-08' },
+    ];
+
+    // IMPROVEMENT 3: Seed demo token history (7 days)
+    const dayNames = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000);
+      dayNames.push(d.toISOString().slice(0, 10));
+    }
+    state.tokenHistory = [
+      { date: dayNames[0], total: 2340000, input: 1870000, output: 470000 },
+      { date: dayNames[1], total: 3120000, input: 2490000, output: 630000 },
+      { date: dayNames[2], total: 1890000, input: 1510000, output: 380000 },
+      { date: dayNames[3], total: 4210000, input: 3360000, output: 850000 },
+      { date: dayNames[4], total: 3780000, input: 3020000, output: 760000 },
+      { date: dayNames[5], total: 2950000, input: 2360000, output: 590000 },
+      { date: dayNames[6], total: 1450000, input: 1160000, output: 290000 },
+    ];
+
+    // IMPROVEMENT 2: Seed demo freshness
+    state.lastDataReceived = Date.now();
+    state.lastDataSource = 'demo';
+
+    updateMetricsPanel();
+    updateTokenChart();
+    updateFreshnessIndicator();
 
     updateSystemPanel();
 
@@ -8232,6 +8834,9 @@ Auth: tokens refreshed, no anomalies`;
       updateHealthUI();
       updateGoalsPanel();
       updateSystemPanel();
+      updateMetricsPanel();
+      updateTokenChart();
+      updateFreshnessIndicator();
       fetchSummary();
       fetchGlossary();
       requestAnimationFrame(animate);

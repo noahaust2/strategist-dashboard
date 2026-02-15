@@ -8,6 +8,8 @@ Endpoints:
     GET /            → serves dashboard/index.html
     GET /api/state   → full state snapshot
     GET /api/git     → commits, goal distribution, daily activity
+    GET /api/summary → plain-English system summary (cycle, goals, log, metrics)
+    GET /api/glossary→ definitions for key system terms
     GET /api/daydream→ D3-compatible node-link graph
     GET /api/security→ security events, wrapper events, backup status
     GET /api/architecture → goals, assets, document metadata, synapse history
@@ -222,6 +224,100 @@ def parse_metrics(path: str) -> dict:
             if key:
                 sections.setdefault(current_section, {})[key] = val
     return {"sections": sections}
+
+
+def build_summary() -> dict:
+    """Build a plain-English system summary from STATE.md, LOG.md, and METRICS.md."""
+    planning_dir = os.path.join(PROJECT_DIR, ".planning")
+
+    # --- STATE.md ---
+    state_text = _read_file(os.path.join(planning_dir, "STATE.md")) or ""
+    cycle_number = None
+    active_goals = []
+    current_status = "Unknown"
+    for line in state_text.splitlines():
+        lower = line.lower()
+        # Cycle number: look for "Cycle: 42" or "cycle 42" patterns
+        if cycle_number is None:
+            m = re.search(r"cycle[:\s]+(\d+)", lower)
+            if m:
+                cycle_number = int(m.group(1))
+        # Current status: look for "Status:" line
+        if "status:" in lower and not line.strip().startswith("#"):
+            current_status = line.split(":", 1)[1].strip()
+        # Active goals from lines like "- **Goal Name** (active)"
+        # or "## Goal Name" sections
+        if line.startswith("## ") and "goal" in lower:
+            active_goals.append(line[3:].strip())
+
+    # Also try to pick up goals from GOALS.md
+    goals_text = _read_file(os.path.join(planning_dir, "GOALS.md")) or ""
+    if not active_goals:
+        for line in goals_text.splitlines():
+            if line.startswith("## "):
+                active_goals.append(line[3:].strip())
+
+    # --- LOG.md (latest entry) ---
+    log_text = _read_file(os.path.join(planning_dir, "LOG.md")) or ""
+    accomplishments = []
+    blockers = []
+    next_steps = []
+    # Split into dated entries (## YYYY-MM-DD or ## Cycle N)
+    log_sections = re.split(r"(?=^## )", log_text, flags=re.MULTILINE)
+    latest_entry = ""
+    for section in reversed(log_sections):
+        if section.strip():
+            latest_entry = section.strip()
+            break
+
+    # Parse accomplishments, blockers, next steps from latest entry
+    current_list = None
+    for line in latest_entry.splitlines():
+        lower = line.lower().strip()
+        if any(kw in lower for kw in ["accomplish", "completed", "done", "achieved", "delivered"]):
+            current_list = accomplishments
+        elif any(kw in lower for kw in ["blocker", "blocked", "issue", "problem", "stuck"]):
+            current_list = blockers
+        elif any(kw in lower for kw in ["next", "plan", "todo", "upcoming"]):
+            current_list = next_steps
+        elif line.strip().startswith("- ") and current_list is not None:
+            current_list.append(line.strip().lstrip("- ").strip())
+
+    # --- METRICS.md ---
+    metrics_data = parse_metrics(os.path.join(planning_dir, "METRICS.md"))
+    sections = metrics_data.get("sections", {})
+    prediction_count = 0
+    accuracy_rate = "N/A"
+    total_cycles = cycle_number or 0
+    for sec_name, sec_vals in sections.items():
+        for key, val in sec_vals.items():
+            key_lower = key.lower()
+            if "prediction" in key_lower and "count" in key_lower:
+                try:
+                    prediction_count = int(re.sub(r"[^\d]", "", val))
+                except ValueError:
+                    pass
+            elif "accuracy" in key_lower or "calibration" in key_lower:
+                accuracy_rate = val
+            elif "cycle" in key_lower and "count" in key_lower:
+                try:
+                    total_cycles = int(re.sub(r"[^\d]", "", val))
+                except ValueError:
+                    pass
+
+    return {
+        "currentCycle": cycle_number,
+        "activeGoals": active_goals,
+        "currentStatus": current_status,
+        "accomplishments": accomplishments[:10],
+        "blockers": blockers[:5],
+        "nextSteps": next_steps[:5],
+        "metrics": {
+            "predictionCount": prediction_count,
+            "accuracyRate": accuracy_rate,
+            "cycleCount": total_cycles,
+        },
+    }
 
 
 def parse_security_log(path: str) -> List[dict]:
@@ -1434,6 +1530,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 "wrapper": parse_security_log(wrapper_path),
                 "backup": parse_json_file(backup_path),
             })
+
+        elif path == "/api/summary":
+            self._send_json(build_summary())
 
         elif path == "/api/documents":
             self._send_json(get_full_document_map())

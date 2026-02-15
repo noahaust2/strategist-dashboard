@@ -430,6 +430,52 @@ svg#main-viz {
   color: var(--accent-pink, #f472b6);
 }
 
+/* Glossary panel */
+.glossary-term {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 10px 0;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.glossary-term:last-child { border-bottom: none; }
+.glossary-term:hover { background: rgba(255,255,255,0.02); }
+.glossary-term-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  margin-bottom: 4px;
+}
+.glossary-term-short {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.glossary-term-long {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  display: none;
+}
+.glossary-term.expanded .glossary-term-long { display: block; }
+.glossary-term-toggle {
+  font-size: 10px;
+  color: var(--text-muted);
+  float: right;
+  margin-top: 2px;
+}
+.glossary-term.expanded .glossary-term-toggle::after { content: '\25B2'; }
+.glossary-term:not(.expanded) .glossary-term-toggle::after { content: '\25BC'; }
+.glossary-no-results {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 16px 0;
+  text-align: center;
+}
+
 /* Current task card */
 .task-card {
   background: var(--bg-card);
@@ -2255,6 +2301,7 @@ svg#main-viz {
   <div class="sidebar-tab" data-panel="goals" title="Goals">&#9673;</div>
   <div class="sidebar-tab" data-panel="system" title="System Architecture">&#9055;</div>
   <div class="sidebar-tab" data-panel="logs" title="Logs &amp; Alerts">&#9776;</div>
+  <div class="sidebar-tab" data-panel="glossary" title="Glossary">&#63;</div>
   <div class="sidebar-tab" data-panel="commit" title="Commit Detail">&#9679;</div>
   <div class="sidebar-tab" data-panel="raw" title="Raw Data">&#60;/&#62;</div>
 </div>
@@ -2356,6 +2403,20 @@ svg#main-viz {
     <div class="panel-header">Recent Log</div>
     <div id="log-container">
       <div style="font-size:12px;color:var(--text-muted);">No log entries</div>
+    </div>
+  </div>
+
+  <!-- Glossary Panel -->
+  <div class="sidebar-panel" id="panel-glossary">
+    <div class="panel-header">Glossary</div>
+    <div id="glossary-search-box" style="margin-bottom:14px;">
+      <input type="text" id="glossary-filter" placeholder="Search terms..."
+        style="width:100%;padding:8px 12px;background:var(--bg-tertiary);border:1px solid var(--border-subtle);
+        border-radius:6px;color:var(--text-primary);font-size:13px;font-family:var(--font-sans);outline:none;"
+        onfocus="this.style.borderColor='var(--accent-blue)'" onblur="this.style.borderColor='var(--border-subtle)'" />
+    </div>
+    <div id="glossary-container">
+      <div style="font-size:12px;color:var(--text-muted);">Loading glossary...</div>
     </div>
   </div>
 
@@ -3984,6 +4045,85 @@ svg#main-viz {
       legend.appendChild(li);
     });
   }
+
+  // ----------------------------------------------------------
+  // Glossary Panel
+  // ----------------------------------------------------------
+  let glossaryData = [];
+
+  function fetchGlossary() {
+    fetch(API_BASE + '/api/glossary')
+      .then(r => r.json())
+      .then(terms => {
+        glossaryData = terms;
+        renderGlossary(terms);
+      })
+      .catch(() => {
+        // Use built-in fallback terms if API unavailable
+        glossaryData = [
+          { name: 'Cycle', short: 'One complete loop of the agent\'s work process.', long: 'A cycle is the fundamental unit of agent activity. Each cycle follows the pattern READ, DECIDE, EXECUTE, VERIFY and then repeats.' },
+          { name: 'Phase (READ / DECIDE / EXEC / VERIFY)', short: 'The four steps the agent goes through in every work cycle.', long: 'READ: review goals and state. DECIDE: pick a task. EXECUTE: do the work. VERIFY: check results.' },
+          { name: 'Reality Model', short: 'The agent\'s internal understanding of how the world works.', long: 'A structured framework tracking what the agent knows, confidence levels, and knowledge gaps.' },
+          { name: 'Teammate', short: 'A sub-agent spawned to handle a specific task in parallel.', long: 'Temporary worker agents created by the main Strategist to handle specific tasks concurrently.' },
+        ];
+        renderGlossary(glossaryData);
+      });
+  }
+
+  function renderGlossary(terms) {
+    const container = document.getElementById('glossary-container');
+    if (!container) return;
+    if (!terms || terms.length === 0) {
+      container.innerHTML = '<div class="glossary-no-results">No terms available.</div>';
+      return;
+    }
+    container.innerHTML = '';
+    terms.forEach(term => {
+      const el = document.createElement('div');
+      el.className = 'glossary-term';
+      el.dataset.name = (term.name || '').toLowerCase();
+      el.dataset.short = (term.short || '').toLowerCase();
+      el.innerHTML =
+        '<div class="glossary-term-toggle"></div>' +
+        '<div class="glossary-term-name">' + escapeHtml(term.name) + '</div>' +
+        '<div class="glossary-term-short">' + escapeHtml(term.short) + '</div>' +
+        '<div class="glossary-term-long">' + escapeHtml(term.long || '') + '</div>';
+      el.addEventListener('click', () => el.classList.toggle('expanded'));
+      container.appendChild(el);
+    });
+  }
+
+  // Glossary search/filter
+  document.getElementById('glossary-filter')?.addEventListener('input', function() {
+    const query = this.value.toLowerCase().trim();
+    const container = document.getElementById('glossary-container');
+    if (!container) return;
+    const items = container.querySelectorAll('.glossary-term');
+    let visibleCount = 0;
+    items.forEach(item => {
+      const matchesName = item.dataset.name.includes(query);
+      const matchesShort = item.dataset.short.includes(query);
+      if (!query || matchesName || matchesShort) {
+        item.style.display = '';
+        visibleCount++;
+      } else {
+        item.style.display = 'none';
+      }
+    });
+    // Show no-results message
+    let noResults = container.querySelector('.glossary-no-results');
+    if (visibleCount === 0 && query) {
+      if (!noResults) {
+        noResults = document.createElement('div');
+        noResults.className = 'glossary-no-results';
+        container.appendChild(noResults);
+      }
+      noResults.textContent = 'No matching terms for "' + escapeHtml(query) + '"';
+      noResults.style.display = '';
+    } else if (noResults) {
+      noResults.style.display = 'none';
+    }
+  });
 
   // ----------------------------------------------------------
   // System Architecture Panel
@@ -7930,6 +8070,7 @@ Auth: tokens refreshed, no anomalies`;
       updateHealthUI();
       updateGoalsPanel();
       updateSystemPanel();
+      fetchGlossary();
       requestAnimationFrame(animate);
       connectSSE();
     });

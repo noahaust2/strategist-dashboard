@@ -8,11 +8,15 @@ Endpoints:
     GET /            → serves dashboard/index.html
     GET /api/state   → full state snapshot
     GET /api/git     → commits, goal distribution, daily activity
-    GET /api/summary → plain-English system summary (cycle, goals, log, metrics)
+    GET /api/summary → plain-English system summary (cycle, goals, log, metrics,
+                       predictions, token tracking, health scorecard)
     GET /api/glossary→ definitions for key system terms
     GET /api/daydream→ D3-compatible node-link graph
     GET /api/security→ security events, wrapper events, backup status
     GET /api/architecture → goals, assets, document metadata, synapse history
+    GET /api/predictions → prediction data from PREDICTIONS.md and domain files
+    GET /api/tokens  → token tracking data from TOKEN-TRACKING.md
+    GET /api/health  → health scorecard (goal health, metrics, system grade)
     GET /api/stream  → SSE event stream (persistent connection)
 """
 
@@ -47,6 +51,8 @@ WATCHED_FILES = {
     os.path.join(PROJECT_DIR, ".planning", "LOG.md"):           "log",
     os.path.join(PROJECT_DIR, ".planning", "GOALS.md"):         "goals_full",
     os.path.join(PROJECT_DIR, ".planning", "ASSETS.md"):        "assets_full",
+    os.path.join(PROJECT_DIR, ".planning", "PREDICTIONS.md"):  "predictions",
+    os.path.join(PROJECT_DIR, ".planning", "TOKEN-TRACKING.md"): "token_tracking",
 }
 
 # Additional files to watch for document-change events (architecture view)
@@ -305,6 +311,43 @@ def build_summary() -> dict:
                 except ValueError:
                     pass
 
+    # Enrich with prediction data from the prediction pipeline
+    pred_data = parse_predictions()
+    pred_stats = pred_data.get("stats", {})
+    if pred_stats.get("total", 0) > 0:
+        prediction_count = pred_stats["total"]
+    if pred_stats.get("accuracy", "N/A") != "N/A":
+        accuracy_rate = pred_stats["accuracy"]
+
+    # Build prediction list for frontend (combined upcoming + resolved)
+    predictions_for_frontend = []
+    for p in pred_data.get("resolved", []):
+        predictions_for_frontend.append({
+            "text": p.get("text", ""),
+            "outcome": p.get("outcome", "unknown"),
+            "date": p.get("date", ""),
+            "confidence": p.get("confidence", "medium"),
+            "confidenceValue": p.get("confidenceValue", 50),
+            "id": p.get("id", ""),
+            "domain": p.get("domain", ""),
+        })
+    for p in pred_data.get("upcoming", [])[:30]:
+        predictions_for_frontend.append({
+            "text": p.get("text", ""),
+            "outcome": "pending",
+            "date": p.get("date", ""),
+            "confidence": p.get("confidence", "medium"),
+            "confidenceValue": p.get("confidenceValue", 50),
+            "id": p.get("id", ""),
+            "domain": p.get("domain", ""),
+        })
+
+    # Token tracking data for frontend chart
+    token_data = parse_token_tracking()
+
+    # Health scorecard data
+    health_data = parse_health_scorecard()
+
     return {
         "currentCycle": cycle_number,
         "activeGoals": active_goals,
@@ -317,7 +360,782 @@ def build_summary() -> dict:
             "accuracyRate": accuracy_rate,
             "cycleCount": total_cycles,
         },
+        "predictions": predictions_for_frontend,
+        "predictionStats": pred_stats,
+        "predictionCalibration": pred_data.get("calibration", []),
+        "tokenTracking": token_data.get("daily", []),
+        "tokenAlerts": token_data.get("alerts", []),
+        "tokenGoalDistribution": token_data.get("goalDistribution", {}),
+        "healthScorecard": health_data,
     }
+
+
+# ── Prediction Data Pipeline ─────────────────────────────────────────────────
+
+def parse_predictions() -> dict:
+    """Parse PREDICTIONS.md index and all domain files in predictions/ directory.
+
+    Returns structured prediction data:
+    - stats: total, resolved, accuracy, domains
+    - calibration: per-band breakdown
+    - upcoming: list of pending predictions sorted by check date
+    - resolved: list of resolved predictions with outcomes
+    """
+    planning_dir = os.path.join(PROJECT_DIR, ".planning")
+    index_path = os.path.join(planning_dir, "PREDICTIONS.md")
+    predictions_dir = os.path.join(planning_dir, "predictions")
+
+    # --- Parse the index file for system stats ---
+    index_text = _read_file(index_path) or ""
+
+    stats = {
+        "total": 0,
+        "active": 0,
+        "resolved": 0,
+        "correct": 0,
+        "incorrect": 0,
+        "accuracy": "N/A",
+        "domains": 0,
+    }
+
+    # Extract system stats from the table
+    for line in index_text.splitlines():
+        lower = line.lower()
+        if "total predictions" in lower:
+            m = re.search(r"(\d+)\s*\(", line)
+            if m:
+                stats["total"] = int(m.group(1))
+            # Extract active count
+            m_active = re.search(r"(\d+)\s*active", line)
+            if m_active:
+                stats["active"] = int(m_active.group(1))
+            # Extract resolved count
+            m_resolved = re.search(r"(\d+)\s*resolved", line)
+            if m_resolved:
+                stats["resolved"] = int(m_resolved.group(1))
+        elif line.startswith("| Resolved") or ("resolved" in lower and "correct" in lower and "incorrect" not in lower):
+            # Parse "| Resolved | 9 (8 CORRECT, 1 INCORRECT) |"
+            m_correct = re.search(r"(\d+)\s*CORRECT", line)
+            m_incorrect = re.search(r"(\d+)\s*INCORRECT", line)
+            if m_correct:
+                stats["correct"] = int(m_correct.group(1))
+            if m_incorrect:
+                stats["incorrect"] = int(m_incorrect.group(1))
+        elif "domains" in lower and "|" in line and not line.strip().startswith("#"):
+            m_dom = re.search(r"(\d+)\s*\(", line)
+            if m_dom:
+                stats["domains"] = int(m_dom.group(1))
+
+    # Compute accuracy
+    if stats["resolved"] > 0:
+        stats["accuracy"] = f"{round(stats['correct'] / stats['resolved'] * 100)}%"
+
+    # Extract calibration bands from index
+    calibration = []
+    in_calibration = False
+    for line in index_text.splitlines():
+        if "calibration stats" in line.lower():
+            in_calibration = True
+            continue
+        if in_calibration and line.startswith("| ") and "%" in line:
+            cols = [c.strip() for c in line.split("|")]
+            cols = [c for c in cols if c]
+            if len(cols) >= 4 and not cols[0].startswith("-") and "band" not in cols[0].lower():
+                calibration.append({
+                    "band": cols[0],
+                    "resolved": cols[1] if len(cols) > 1 else "0",
+                    "correct": cols[2] if len(cols) > 2 else "0",
+                    "calibration": cols[3] if len(cols) > 3 else "N/A",
+                })
+        elif in_calibration and line.startswith("## ") and "calibration" not in line.lower():
+            in_calibration = False
+
+    # --- Parse domain files for individual predictions ---
+    upcoming = []
+    resolved_list = []
+
+    domain_files = []
+    if os.path.isdir(predictions_dir):
+        for fname in sorted(os.listdir(predictions_dir)):
+            if fname.endswith(".md"):
+                domain_files.append(os.path.join(predictions_dir, fname))
+
+    for fpath in domain_files:
+        domain_name = os.path.splitext(os.path.basename(fpath))[0]
+        text = _read_file(fpath)
+        if text is None:
+            continue
+
+        # Parse tables: | ID | Conf | Check/Result | ... |
+        in_resolved_section = False
+        in_active_section = False
+
+        for line in text.splitlines():
+            lower = line.lower().strip()
+
+            # Section detection
+            if lower.startswith("## resolved"):
+                in_resolved_section = True
+                in_active_section = False
+                continue
+            elif lower.startswith("## active"):
+                in_active_section = True
+                in_resolved_section = False
+                continue
+            elif lower.startswith("## ") and ("data update" in lower or "note" in lower):
+                in_resolved_section = False
+                in_active_section = False
+                continue
+
+            if not line.strip().startswith("| "):
+                continue
+
+            cols = [c.strip() for c in line.split("|")]
+            cols = [c for c in cols if c]
+
+            # Skip header/separator rows
+            if len(cols) < 3:
+                continue
+            if cols[0].lower() in ("id", "---", "----") or cols[0].startswith("-"):
+                continue
+            if all(c.startswith("-") for c in cols):
+                continue
+
+            pred_id = cols[0].strip()
+            if not pred_id or not pred_id[0].isalpha():
+                continue
+
+            # Parse confidence
+            conf_str = cols[1].strip().rstrip("%")
+            try:
+                confidence = int(conf_str)
+            except ValueError:
+                confidence = 50
+
+            # Determine if resolved or active based on section or content
+            check_col = cols[2].strip() if len(cols) > 2 else ""
+            description = cols[3].strip() if len(cols) > 3 else ""
+            falsification = cols[4].strip() if len(cols) > 4 else ""
+
+            is_resolved = False
+            outcome = "pending"
+
+            if in_resolved_section:
+                is_resolved = True
+                # In resolved sections: | ID | Conf | Result | Summary |
+                result_lower = check_col.lower()
+                if "correct" in result_lower:
+                    outcome = "correct"
+                elif "incorrect" in result_lower:
+                    outcome = "incorrect"
+                else:
+                    outcome = result_lower or "unknown"
+            elif "RESOLVED" in check_col.upper() or "RESOLVED" in line.upper():
+                is_resolved = True
+                if "CORRECT" in line.upper() and "INCORRECT" not in line.upper():
+                    outcome = "correct"
+                elif "INCORRECT" in line.upper():
+                    outcome = "incorrect"
+            else:
+                # Active prediction
+                is_resolved = False
+                outcome = "pending"
+
+            # Confidence classification for frontend
+            if confidence >= 75:
+                conf_class = "high"
+            elif confidence >= 45:
+                conf_class = "medium"
+            else:
+                conf_class = "low"
+
+            entry = {
+                "id": pred_id,
+                "text": description or check_col,
+                "confidence": conf_class,
+                "confidenceValue": confidence,
+                "domain": domain_name,
+                "outcome": outcome,
+                "date": check_col if not is_resolved else "",
+            }
+
+            if is_resolved:
+                resolved_list.append(entry)
+            else:
+                upcoming.append(entry)
+
+    # Sort upcoming by check date (earliest first)
+    def _sort_key(p):
+        date_str = p.get("date", "")
+        # Extract date from formats like "03-20" or "2026-03-20"
+        m = re.search(r"(\d{2})-(\d{2})", date_str)
+        if m:
+            month, day = int(m.group(1)), int(m.group(2))
+            return (month, day)
+        return (99, 99)
+
+    upcoming.sort(key=_sort_key)
+
+    # Sort resolved by ID
+    resolved_list.sort(key=lambda p: p.get("id", ""))
+
+    return {
+        "stats": stats,
+        "calibration": calibration,
+        "upcoming": upcoming[:50],  # Cap at 50 for API response size
+        "resolved": resolved_list,
+    }
+
+
+# ── Token Tracking Data Pipeline ────────────────────────────────────────────
+
+def parse_token_tracking() -> dict:
+    """Parse TOKEN-TRACKING.md for per-cycle token data and weekly summaries.
+
+    Returns structured token data for the frontend token chart.
+    """
+    tracking_path = os.path.join(PROJECT_DIR, ".planning", "TOKEN-TRACKING.md")
+    text = _read_file(tracking_path)
+    if text is None:
+        return {"cycles": [], "weekly": [], "daily": [], "alerts": []}
+
+    cycles = []
+    weekly = []
+    alerts = []
+    goal_distribution = {}
+
+    # Parse the backfilled cycle ledger table
+    # Format: | Cycle | Date | Type | TM | Total | Primary Goal (%) | Secondary (%) | OH+META (%) |
+    in_cycle_table = False
+    in_weekly_table = False
+    in_goal_dist = False
+    in_alerts = False
+
+    for line in text.splitlines():
+        lower = line.lower().strip()
+
+        # Section detection
+        if "cycle ledger" in lower and lower.startswith("#"):
+            in_cycle_table = True
+            in_weekly_table = False
+            in_goal_dist = False
+            in_alerts = False
+            continue
+        elif "weekly summar" in lower and lower.startswith("#"):
+            in_weekly_table = True
+            in_cycle_table = False
+            in_goal_dist = False
+            continue
+        elif "backfill goal distribution" in lower or ("goal distribution" in lower and lower.startswith("#")):
+            in_goal_dist = True
+            in_cycle_table = False
+            continue
+        elif "alert" in lower and "backfill" in lower:
+            in_alerts = True
+            in_goal_dist = False
+            continue
+        elif lower.startswith("---"):
+            in_cycle_table = False
+            in_weekly_table = False
+            in_goal_dist = False
+            in_alerts = False
+            continue
+        elif lower.startswith("## ") or lower.startswith("### "):
+            # New section header — check what it is
+            if "backfill summary" in lower or "backfill goal" in lower:
+                in_cycle_table = False
+                in_goal_dist = "goal distribution" in lower
+            elif "live tracking" in lower:
+                in_cycle_table = True  # Resume for live data
+            continue
+
+        if not line.strip().startswith("| "):
+            # Check for alert lines
+            if in_alerts and line.strip().startswith("- "):
+                alert_text = line.strip().lstrip("- ").strip()
+                if alert_text:
+                    alerts.append(alert_text)
+            continue
+
+        cols = [c.strip() for c in line.split("|")]
+        cols = [c for c in cols if c]
+
+        if len(cols) < 2:
+            continue
+        if cols[0].lower() in ("cycle", "week", "goal", "metric", "---") or cols[0].startswith("-"):
+            continue
+        if all(c.startswith("-") for c in cols):
+            continue
+
+        if in_cycle_table:
+            # Parse: | Cycle | Date | Type | TM | Total | Primary (%) | Secondary (%) | OH+META (%) |
+            cycle_id = cols[0].strip()
+            if not cycle_id or cycle_id.lower() in ("cycle", "---"):
+                continue
+            # Skip summary rows (e.g., "18 entries (16 numbered)", "~126K")
+            if "entries" in cycle_id.lower() or "total" in cycle_id.lower():
+                continue
+            # Cycle ID should start with a digit or be like "202a", "195b"
+            if not cycle_id[0].isdigit():
+                continue
+
+            date_str = cols[1].strip() if len(cols) > 1 else ""
+            cycle_type = cols[2].strip() if len(cols) > 2 else ""
+            teammates = cols[3].strip() if len(cols) > 3 else "0"
+            total_str = cols[4].strip() if len(cols) > 4 else "0"
+
+            # Parse total tokens (e.g., "200K", "60K")
+            total_tokens = _parse_token_value(total_str)
+
+            # Parse teammates count
+            try:
+                tm_count = int(teammates)
+            except ValueError:
+                tm_count = 0
+
+            # Parse goal allocations from remaining columns
+            primary = cols[5].strip() if len(cols) > 5 else ""
+            secondary = cols[6].strip() if len(cols) > 6 else ""
+            overhead = cols[7].strip() if len(cols) > 7 else ""
+
+            cycles.append({
+                "cycle": cycle_id,
+                "date": date_str,
+                "type": cycle_type,
+                "teammates": tm_count,
+                "total": total_tokens,
+                "primary": primary,
+                "secondary": secondary,
+                "overhead": overhead,
+            })
+
+        elif in_weekly_table:
+            # Parse: | Goal | Tokens | % | Target % | Delta | Alert |
+            goal_name = cols[0].strip()
+            tokens_str = cols[1].strip() if len(cols) > 1 else "0"
+            pct = cols[2].strip() if len(cols) > 2 else "0%"
+            target = cols[3].strip() if len(cols) > 3 else ""
+            delta = cols[4].strip() if len(cols) > 4 else ""
+            alert = cols[5].strip() if len(cols) > 5 else ""
+
+            weekly.append({
+                "goal": goal_name,
+                "tokens": _parse_token_value(tokens_str),
+                "pct": pct,
+                "target": target,
+                "delta": delta,
+                "alert": alert,
+            })
+
+        elif in_goal_dist:
+            # Parse: | Goal | Est. Tokens | % of Total |
+            goal_name = cols[0].strip()
+            tokens_str = cols[1].strip() if len(cols) > 1 else "0"
+            pct = cols[2].strip() if len(cols) > 2 else "0%"
+            goal_distribution[goal_name] = {
+                "tokens": _parse_token_value(tokens_str),
+                "pct": pct,
+            }
+
+    # Build daily aggregation from cycles (group by date)
+    daily: Dict[str, int] = defaultdict(int)
+    for c in cycles:
+        date_key = c["date"]
+        if date_key:
+            daily[date_key] += c["total"]
+
+    # Convert to sorted list for frontend chart
+    daily_list = []
+    for date_key in sorted(daily.keys()):
+        daily_list.append({
+            "date": _normalize_date(date_key),
+            "total": daily[date_key],
+            "input": int(daily[date_key] * 0.8),  # estimate 80/20 split
+            "output": int(daily[date_key] * 0.2),
+        })
+
+    return {
+        "cycles": cycles,
+        "weekly": weekly,
+        "daily": daily_list,
+        "goalDistribution": goal_distribution,
+        "alerts": alerts,
+    }
+
+
+def _parse_token_value(s: str) -> int:
+    """Parse token count strings like '200K', '1,537K', '~1,130K', '2,260K'."""
+    s = s.strip().lstrip("~").replace(",", "").replace("*", "")
+    if not s or s == "0":
+        return 0
+    m = re.match(r"(\d+(?:\.\d+)?)\s*([KkMm])?", s)
+    if m:
+        num = float(m.group(1))
+        unit = (m.group(2) or "").upper()
+        if unit == "K":
+            return int(num * 1000)
+        elif unit == "M":
+            return int(num * 1000000)
+        return int(num)
+    return 0
+
+
+def _normalize_date(date_str: str) -> str:
+    """Normalize date strings like 'Feb 13' to '2026-02-13' format."""
+    month_map = {
+        "jan": "01", "feb": "02", "mar": "03", "apr": "04",
+        "may": "05", "jun": "06", "jul": "07", "aug": "08",
+        "sep": "09", "oct": "10", "nov": "11", "dec": "12",
+    }
+    # Already in ISO format
+    if re.match(r"\d{4}-\d{2}-\d{2}", date_str):
+        return date_str
+    # "Feb 13" format
+    m = re.match(r"(\w{3})\s+(\d{1,2})", date_str)
+    if m:
+        month = month_map.get(m.group(1).lower(), "01")
+        day = m.group(2).zfill(2)
+        return f"2026-{month}-{day}"
+    return date_str
+
+
+# ── Health Scorecard Data Pipeline ──────────────────────────────────────────
+
+def parse_health_scorecard() -> dict:
+    """Build structured health scorecard data from STATE.md and METRICS.md.
+
+    Returns goal health, system metrics, and improvement indicators
+    that the frontend can use instead of demo-mode algorithms.
+    """
+    planning_dir = os.path.join(PROJECT_DIR, ".planning")
+    state_text = _read_file(os.path.join(planning_dir, "STATE.md")) or ""
+    metrics_text = _read_file(os.path.join(planning_dir, "METRICS.md")) or ""
+
+    # --- Parse goal health from STATE.md ---
+    # Only parse goals within the "Reality Model Status" section
+    goal_health = []
+    current_goal = None
+    current_status = "active"
+    current_confidence = "N/A"
+    current_mode = ""
+    in_reality_model = False
+    seen_goals = set()  # Track seen goal names to avoid duplicates
+
+    for line in state_text.splitlines():
+        # Detect Reality Model Status section
+        if line.startswith("## ") and "reality model" in line.lower():
+            in_reality_model = True
+            continue
+        # Stop at next ## section that isn't a subsection of reality model
+        if line.startswith("## ") and in_reality_model and "reality model" not in line.lower():
+            # Save last goal before exiting section
+            if current_goal and current_goal not in seen_goals:
+                goal_health.append(_build_goal_health(
+                    current_goal, current_status, current_confidence, current_mode
+                ))
+                seen_goals.add(current_goal)
+            in_reality_model = False
+            current_goal = None
+            continue
+
+        if not in_reality_model:
+            continue
+
+        # Goal sections: ### Goal Name: STATUS
+        if line.startswith("### ") and "goal" in line.lower():
+            # Save previous goal
+            if current_goal and current_goal not in seen_goals:
+                goal_health.append(_build_goal_health(
+                    current_goal, current_status, current_confidence, current_mode
+                ))
+                seen_goals.add(current_goal)
+
+            header = line[4:].strip()
+            # Parse "Product Goal: PAUSED (with capability watch)"
+            # or "Self-Improvement Goal: ACTIVE — Understanding Mode"
+            parts = header.split(":", 1)
+            current_goal = parts[0].strip()
+            rest = parts[1].strip() if len(parts) > 1 else ""
+
+            current_status = "active"
+            current_confidence = "N/A"
+            current_mode = ""
+
+            rest_lower = rest.lower()
+            if "paused" in rest_lower:
+                current_status = "paused"
+            elif "active" in rest_lower:
+                current_status = "active"
+
+            # Extract mode if present
+            if "understanding mode" in rest_lower:
+                current_mode = "understanding"
+            elif "action mode" in rest_lower:
+                current_mode = "action"
+            elif "low-intensity" in rest_lower:
+                current_mode = "background"
+
+        elif current_goal:
+            lower = line.lower().strip()
+            # Direction confidence
+            if "direction confidence" in lower:
+                m = re.search(r"(\d+)%", line)
+                if m:
+                    current_confidence = f"{m.group(1)}%"
+                elif "n/a" in lower:
+                    current_confidence = "N/A"
+
+    # Don't forget the last goal if we're still in the reality model section
+    if current_goal and current_goal not in seen_goals:
+        goal_health.append(_build_goal_health(
+            current_goal, current_status, current_confidence, current_mode
+        ))
+
+    # --- Parse metrics from METRICS.md ---
+    metrics_summary = {}
+
+    # Prediction calibration
+    pred_section = False
+    for line in metrics_text.splitlines():
+        lower = line.lower().strip()
+        if "prediction calibration" in lower:
+            pred_section = True
+            continue
+        if pred_section and lower.startswith("## "):
+            pred_section = False
+            continue
+
+        if pred_section:
+            if "total predictions" in lower:
+                m = re.search(r"(\d+)", line)
+                if m:
+                    metrics_summary["predictionTotal"] = int(m.group(1))
+            elif "overall accuracy" in lower:
+                m = re.search(r"(\d+)%", line)
+                if m:
+                    metrics_summary["predictionAccuracy"] = f"{m.group(1)}%"
+            elif "premature" in lower:
+                metrics_summary["predictionReliable"] = False
+            elif "resolved" in lower and "correct" in lower:
+                m_correct = re.search(r"(\d+)\s*CORRECT", line, re.IGNORECASE)
+                m_incorrect = re.search(r"(\d+)\s*INCORRECT", line, re.IGNORECASE)
+                if m_correct:
+                    metrics_summary["predictionCorrect"] = int(m_correct.group(1))
+                if m_incorrect:
+                    metrics_summary["predictionIncorrect"] = int(m_incorrect.group(1))
+
+    # Fix validation rate — look for the specific "X/Y validated" pattern
+    for line in metrics_text.splitlines():
+        lower = line.lower().strip()
+        if "fix validation rate" in lower and "validated" in lower:
+            # Match "0/17 validated" specifically (not confidence ratings like "1/5")
+            m = re.search(r"(\d+)/(\d+)\s*validated", line)
+            if m:
+                metrics_summary["fixValidated"] = int(m.group(1))
+                metrics_summary["fixTotal"] = int(m.group(2))
+                break  # Use first specific match
+        elif "fixes installed" in lower:
+            m = re.search(r"installed[^:]*:\s*(\d+)", line, re.IGNORECASE)
+            m_held = re.search(r"validated[^:]*:\s*(\d+)", line, re.IGNORECASE)
+            if m:
+                metrics_summary["fixTotal"] = int(m.group(1))
+            if m_held:
+                metrics_summary["fixValidated"] = int(m_held.group(1))
+        elif "decision accuracy" in lower or "decision quality" in lower:
+            m = re.search(r"(\d+)/(\d+)", line)
+            if m:
+                metrics_summary["decisionCorrect"] = int(m.group(1))
+                metrics_summary["decisionTotal"] = int(m.group(2))
+        elif "self-caught" in lower and "owner-caught" in lower and "ratio" not in lower:
+            # Both on same line: "**Self-caught**: ~8 | **Owner-caught**: ~14"
+            # Avoid the "Detection ratio" line which has percentages
+            m_self = re.search(r"self-caught[^|]*?~?(\d+)", line, re.IGNORECASE)
+            m_owner = re.search(r"owner-caught[^|]*?~?(\d+)", line, re.IGNORECASE)
+            if m_self:
+                metrics_summary["selfCaught"] = int(m_self.group(1))
+            if m_owner:
+                metrics_summary["ownerCaught"] = int(m_owner.group(1))
+        elif "recurrence rate" in lower:
+            m = re.search(r"~?(\d+)%", line)
+            if m:
+                metrics_summary["failureRecurrence"] = f"{m.group(1)}%"
+
+    # Parse cycle count, skill count from System Performance section
+    for line in metrics_text.splitlines():
+        lower = line.lower().strip()
+        if "cycles completed" in lower:
+            # Table format: | Metric | Baseline | Current | Target |
+            # We want the "Current" column (index 3 in split-by-pipe)
+            cols = [c.strip() for c in line.split("|")]
+            cols = [c for c in cols if c]
+            if len(cols) >= 3:
+                # "Current" is the 3rd column (index 2)
+                m = re.search(r"(\d+)", cols[2])
+                if m:
+                    metrics_summary["cycleCount"] = int(m.group(1))
+        elif "failure catalog" in lower:
+            m = re.search(r"(\d+)\s*failure", line)
+            if m:
+                metrics_summary["failureModes"] = int(m.group(1))
+
+    # --- Parse conviction/goal status table from METRICS.md ---
+    conviction_data = []
+    in_conviction = False
+    for line in metrics_text.splitlines():
+        if "conviction status" in line.lower():
+            in_conviction = True
+            continue
+        if in_conviction and line.startswith("## "):
+            in_conviction = False
+            continue
+        if in_conviction and line.startswith("| ") and "|" in line:
+            cols = [c.strip() for c in line.split("|")]
+            cols = [c for c in cols if c]
+            if len(cols) >= 3 and cols[0].lower() not in ("goal", "---"):
+                if not cols[0].startswith("-"):
+                    conviction_data.append({
+                        "goal": cols[0],
+                        "phase": cols[1] if len(cols) > 1 else "",
+                        "conviction": cols[2] if len(cols) > 2 else "",
+                        "notes": cols[3] if len(cols) > 3 else "",
+                    })
+
+    # --- Compute overall system grade ---
+    grade, grade_desc = _compute_system_grade(goal_health, metrics_summary)
+
+    # --- Compute improvement indicators ---
+    improving, speed, growth = _compute_improvement(metrics_summary)
+
+    # --- Determine owner attention needed ---
+    attention, attention_text, attention_urgency = _compute_attention(
+        goal_health, metrics_summary, grade
+    )
+
+    return {
+        "grade": grade,
+        "gradeDesc": grade_desc,
+        "goalHealth": goal_health,
+        "conviction": conviction_data,
+        "metrics": metrics_summary,
+        "improving": improving,
+        "speed": speed,
+        "growth": growth,
+        "attention": attention,
+        "attentionText": attention_text,
+        "attentionUrgency": attention_urgency,
+    }
+
+
+def _build_goal_health(name: str, status: str, confidence: str, mode: str) -> dict:
+    """Build a single goal health entry."""
+    # Determine health based on status and confidence
+    health = "ok"
+    trend = "flat"
+
+    if status == "paused":
+        health = "paused"
+        trend = "flat"
+    elif confidence != "N/A":
+        try:
+            conf_val = int(confidence.rstrip("%"))
+            if conf_val >= 70:
+                health = "ok"
+                trend = "up"
+            elif conf_val >= 40:
+                health = "ok"
+                trend = "flat"
+            elif conf_val >= 20:
+                health = "warn"
+                trend = "flat"
+            else:
+                health = "warn"
+                trend = "down"
+        except ValueError:
+            pass
+
+    return {
+        "name": name,
+        "status": status,
+        "health": health,
+        "trend": trend,
+        "confidence": confidence,
+        "mode": mode,
+    }
+
+
+def _compute_system_grade(goal_health: list, metrics: dict) -> tuple:
+    """Compute overall system grade (A-F) from goal health and metrics."""
+    paused = [g for g in goal_health if g["status"] == "paused"]
+    active = [g for g in goal_health if g["status"] == "active"]
+    bad_goals = [g for g in active if g["health"] == "bad"]
+    warn_goals = [g for g in active if g["health"] == "warn"]
+
+    # Prediction accuracy factor
+    accuracy_str = metrics.get("predictionAccuracy", "N/A")
+    accuracy = None
+    if accuracy_str != "N/A":
+        try:
+            accuracy = int(accuracy_str.rstrip("%"))
+        except ValueError:
+            pass
+
+    # Fix validation factor
+    fix_validated = metrics.get("fixValidated", 0)
+    fix_total = metrics.get("fixTotal", 0)
+
+    if len(bad_goals) >= 2:
+        return ("F", "Critical issues detected. Multiple goals are failing.")
+    elif len(bad_goals) >= 1:
+        return ("D", "Significant issues. At least one goal needs attention.")
+    elif len(warn_goals) >= 2 or (accuracy is not None and accuracy < 50):
+        return ("C", "Some concerns. Worth checking on these areas.")
+    elif len(warn_goals) <= 1 and len(active) > 0:
+        if accuracy is None or accuracy >= 70:
+            if fix_total > 0 and fix_validated / fix_total < 0.1:
+                return ("B", "Healthy overall. Fix validation rate needs improvement.")
+            return ("A", "System running well. Goals progressing with good direction.")
+        else:
+            return ("B", "Mostly good. Prediction accuracy needs more data.")
+    else:
+        return ("B", "Mostly healthy. Monitor for changes.")
+
+
+def _compute_improvement(metrics: dict) -> tuple:
+    """Determine improvement trajectory from metrics."""
+    cycle_count = metrics.get("cycleCount", 0)
+    prediction_total = metrics.get("predictionTotal", 0)
+
+    # If system has high cycle count and growing predictions, it's improving
+    if cycle_count > 150 and prediction_total > 100:
+        return ("yes", "accelerating", "active")
+    elif cycle_count > 100:
+        return ("yes", "steady", "active")
+    elif cycle_count > 50:
+        return ("maybe", "building", "growing")
+    else:
+        return ("maybe", "early", "starting")
+
+
+def _compute_attention(goal_health: list, metrics: dict, grade: str) -> tuple:
+    """Determine if owner attention is needed."""
+    if grade in ("F", "D"):
+        bad_count = len([g for g in goal_health if g["health"] == "bad"])
+        text = f"{bad_count} goal(s) need attention. System health degraded."
+        urgency = "NOW" if grade == "F" else "THIS WEEK"
+        return ("yes", text, urgency)
+    elif grade == "C":
+        return ("optional", "Some areas could use a look. Not urgent.", "WHENEVER CONVENIENT")
+    else:
+        # Check for pending owner actions from metrics
+        pending = []
+        fix_total = metrics.get("fixTotal", 0)
+        fix_validated = metrics.get("fixValidated", 0)
+        if fix_total > 10 and fix_validated == 0:
+            pending.append("No fixes validated yet")
+
+        if pending:
+            return ("optional", " | ".join(pending), "WHENEVER CONVENIENT")
+        return ("no", "System running well on its own. No action needed.", "")
 
 
 GLOSSARY_TERMS = [
@@ -1294,6 +2112,10 @@ def _read_watched_file(path: str, event_type: str):
         return parse_goals_full(path)
     if event_type == "assets_full":
         return parse_assets(path)
+    if event_type == "predictions":
+        return parse_predictions()
+    if event_type == "token_tracking":
+        return parse_token_tracking()
     return parse_markdown_raw(path)
 
 
@@ -1692,6 +2514,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/documents":
             self._send_json(get_full_document_map())
+
+        elif path == "/api/predictions":
+            self._send_json(parse_predictions())
+
+        elif path == "/api/tokens":
+            self._send_json(parse_token_tracking())
+
+        elif path == "/api/health":
+            self._send_json(parse_health_scorecard())
 
         elif path.startswith("/api/commit/"):
             commit_hash = path.split("/api/commit/")[1]

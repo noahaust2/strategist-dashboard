@@ -4781,6 +4781,24 @@ svg#main-viz {
       if (data.metrics.accuracyRate) state.metricsData.accuracyRate = data.metrics.accuracyRate;
       updateMetricsPanel();
     }
+
+    // Populate predictions from API data (replaces demo data)
+    if (data.predictions && Array.isArray(data.predictions) && data.predictions.length > 0) {
+      state.predictions = data.predictions;
+      updatePredictionTracker();
+    }
+
+    // Populate token history from API data (replaces demo data)
+    if (data.tokenTracking && Array.isArray(data.tokenTracking) && data.tokenTracking.length > 0) {
+      state.tokenHistory = data.tokenTracking;
+      updateTokenChart();
+    }
+
+    // Populate health scorecard from API data (used by computeScorecard)
+    if (data.healthScorecard) {
+      state._serverHealthScorecard = data.healthScorecard;
+      updateHealthScorecard();
+    }
   }
 
   // ----------------------------------------------------------
@@ -5046,6 +5064,36 @@ svg#main-viz {
   // ----------------------------------------------------------
   function computeScorecard() {
     const m = state.metricsData;
+
+    // --- Use server-provided health scorecard if available ---
+    const serverSC = state._serverHealthScorecard;
+    if (serverSC && serverSC.goalHealth && serverSC.goalHealth.length > 0) {
+      // Server has real data — use it directly
+      const goalHealthItems = serverSC.goalHealth.map(g => ({
+        name: g.name || '',
+        health: g.health || 'ok',
+        trend: g.trend || 'flat',
+        status: g.status || 'active',
+      }));
+
+      const growth = computeGrowthVitality();
+
+      return {
+        grade: serverSC.grade || 'B',
+        gradeDesc: serverSC.gradeDesc || 'Data from server.',
+        goalHealthItems,
+        improving: serverSC.improving || 'maybe',
+        speed: serverSC.speed || 'steady',
+        attention: serverSC.attention || 'no',
+        attentionText: serverSC.attentionText || 'No action needed.',
+        attentionUrgency: serverSC.attentionUrgency || '',
+        ctxPct: 0,
+        agentCount: state.agents.size,
+        growthLabel: serverSC.growth || growth.label,
+      };
+    }
+
+    // --- Fallback: local heuristic computation (demo mode / no server data) ---
     const goals = state.goals.length > 0 ? state.goals : [];
 
     // Compute per-goal health based on available data
@@ -7334,6 +7382,43 @@ svg#main-viz {
           const data = JSON.parse(e.data);
           if (data && typeof data === 'object') state.assetsData = data;
           updateSystemPanel();
+        } catch(err) { console.warn('SSE parse error:', err); }
+      });
+
+      eventSource.addEventListener('predictions', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          markDataReceived('predictions');
+          if (data && data.stats) {
+            // Update metrics data from prediction stats
+            if (data.stats.total) state.metricsData.predictionCount = data.stats.total;
+            if (data.stats.accuracy && data.stats.accuracy !== 'N/A') state.metricsData.accuracyRate = data.stats.accuracy;
+            // Build prediction list for frontend
+            const preds = [];
+            (data.resolved || []).forEach(p => preds.push(p));
+            (data.upcoming || []).slice(0, 30).forEach(p => {
+              p.outcome = 'pending';
+              preds.push(p);
+            });
+            if (preds.length > 0) {
+              state.predictions = preds;
+              updatePredictionTracker();
+            }
+            updateMetricsPanel();
+            addFeedEntry('metrics', 'Predictions updated (' + (data.stats.total || 0) + ' total)');
+          }
+        } catch(err) { console.warn('SSE parse error:', err); }
+      });
+
+      eventSource.addEventListener('token_tracking', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          markDataReceived('token_tracking');
+          if (data && data.daily && data.daily.length > 0) {
+            state.tokenHistory = data.daily;
+            updateTokenChart();
+            addFeedEntry('metrics', 'Token tracking data updated');
+          }
         } catch(err) { console.warn('SSE parse error:', err); }
       });
 

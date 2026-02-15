@@ -519,6 +519,278 @@ svg#main-viz {
   margin-bottom: 4px;
 }
 
+/* ── Brief Panel (Owner Summary) ── */
+.brief-status-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border-subtle);
+}
+.brief-status-banner.green {
+  background: rgba(34,197,94,0.08);
+  border-color: rgba(34,197,94,0.25);
+}
+.brief-status-banner.yellow {
+  background: rgba(234,179,8,0.08);
+  border-color: rgba(234,179,8,0.25);
+}
+.brief-status-banner.red {
+  background: rgba(239,68,68,0.08);
+  border-color: rgba(239,68,68,0.25);
+}
+.brief-status-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.brief-status-dot.green { background: var(--health-green); box-shadow: 0 0 8px rgba(34,197,94,0.4); }
+.brief-status-dot.yellow { background: var(--health-yellow); box-shadow: 0 0 8px rgba(234,179,8,0.4); }
+.brief-status-dot.red { background: var(--health-red); box-shadow: 0 0 8px rgba(239,68,68,0.4); }
+.brief-status-text {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+.brief-status-grade {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.brief-attention {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+}
+.brief-attention.urgent {
+  border-color: rgba(239,68,68,0.3);
+  background: rgba(239,68,68,0.06);
+}
+.brief-attention.optional {
+  border-color: rgba(234,179,8,0.2);
+  background: rgba(234,179,8,0.04);
+}
+.brief-attention-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  margin-top: 1px;
+}
+.brief-attention-urgency {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.06);
+  color: var(--text-muted);
+}
+.brief-section {
+  margin-bottom: 16px;
+}
+.brief-section-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.brief-section-header-icon {
+  font-size: 12px;
+  opacity: 0.6;
+}
+.brief-goal-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+}
+.brief-goal-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+.brief-goal-dot.green { background: var(--health-green); }
+.brief-goal-dot.yellow { background: var(--health-yellow); }
+.brief-goal-dot.blue { background: var(--accent-blue); }
+.brief-goal-dot.muted { background: var(--text-muted); opacity: 0.5; }
+.brief-goal-info {
+  flex: 1;
+  min-width: 0;
+}
+.brief-goal-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+.brief-goal-detail {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.brief-goal-status-badge {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.brief-goal-status-badge.active {
+  background: rgba(52,211,153,0.12);
+  color: var(--accent-green);
+}
+.brief-goal-status-badge.paused {
+  background: rgba(96,96,128,0.15);
+  color: var(--text-muted);
+}
+.brief-thinking-item {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  padding: 4px 0 4px 16px;
+  position: relative;
+}
+.brief-thinking-item::before {
+  content: '\2022';
+  position: absolute;
+  left: 0;
+  color: var(--accent-violet);
+}
+.brief-recent-item {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  padding: 3px 0 3px 16px;
+  position: relative;
+}
+.brief-recent-item::before {
+  content: '\2022';
+  position: absolute;
+  left: 0;
+  color: var(--accent-cyan);
+}
+.brief-report-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.brief-report-card:hover {
+  border-color: var(--border-active);
+}
+.brief-report-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.brief-report-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.brief-report-card-date {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+.brief-report-card-preview {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  max-height: 80px;
+  overflow: hidden;
+  position: relative;
+}
+.brief-report-card-preview::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  background: linear-gradient(transparent, var(--bg-card));
+}
+.brief-report-expanded {
+  max-height: none;
+  overflow: visible;
+}
+.brief-report-expanded::after {
+  display: none;
+}
+.brief-report-full {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 500px;
+  overflow-y: auto;
+}
+.brief-report-full::-webkit-scrollbar { width: 4px; }
+.brief-report-full::-webkit-scrollbar-track { background: transparent; }
+.brief-report-full::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 2px; }
+.brief-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 8px 0;
+}
+.brief-cycle-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: rgba(34,211,238,0.1);
+  color: var(--accent-cyan);
+  margin-bottom: 10px;
+}
+.brief-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 16px 0;
+}
+
 /* Current task card */
 .task-card {
   background: var(--bg-card);
@@ -2849,6 +3121,7 @@ svg#main-viz {
 
 <div id="sidebar-tabs">
   <div class="sidebar-tab active" data-panel="process" title="Process &amp; Agents">&#9881;</div>
+  <div class="sidebar-tab" data-panel="brief" title="Owner Brief">&#9993;</div>
   <div class="sidebar-tab" data-panel="thinking" title="Thinking">&#9733;</div>
   <div class="sidebar-tab" data-panel="goals" title="Goals">&#9673;</div>
   <div class="sidebar-tab" data-panel="metrics" title="Metrics &amp; Predictions">&#9650;</div>
@@ -2904,6 +3177,83 @@ svg#main-viz {
 
     <div class="panel-header" style="margin-top:16px;">Heartbeat</div>
     <div id="heartbeat-display" style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">Last heartbeat: --</div>
+  </div>
+
+  <!-- Owner Brief Panel -->
+  <div class="sidebar-panel" id="panel-brief">
+    <!-- Status banner: Is it healthy? -->
+    <div id="brief-status-banner" class="brief-status-banner green">
+      <div id="brief-status-dot" class="brief-status-dot green"></div>
+      <div id="brief-status-text" class="brief-status-text">Loading...</div>
+      <div id="brief-status-grade" class="brief-status-grade"></div>
+    </div>
+
+    <!-- Attention needed -->
+    <div id="brief-attention" class="brief-attention" style="display:none;">
+      <span class="brief-attention-icon"></span>
+      <span id="brief-attention-text"></span>
+      <span id="brief-attention-urgency" class="brief-attention-urgency"></span>
+    </div>
+
+    <!-- Current cycle -->
+    <div id="brief-cycle-badge" class="brief-cycle-badge" style="display:none;"></div>
+
+    <!-- What's it doing? -->
+    <div class="brief-section">
+      <div class="brief-section-header">
+        <span class="brief-section-header-icon">&#9654;</span>
+        What It's Doing
+      </div>
+      <div id="brief-doing-container">
+        <div class="brief-empty">Waiting for data...</div>
+      </div>
+    </div>
+
+    <!-- Goal status -->
+    <div class="brief-section">
+      <div class="brief-section-header">
+        <span class="brief-section-header-icon">&#9673;</span>
+        Goal Status
+      </div>
+      <div id="brief-goals-container">
+        <div class="brief-empty">Waiting for data...</div>
+      </div>
+    </div>
+
+    <!-- How's it thinking? -->
+    <div class="brief-section">
+      <div class="brief-section-header">
+        <span class="brief-section-header-icon">&#9733;</span>
+        How It's Thinking
+      </div>
+      <div id="brief-thinking-container">
+        <div class="brief-empty">Waiting for data...</div>
+      </div>
+    </div>
+
+    <div class="brief-divider"></div>
+
+    <!-- Latest daily summary -->
+    <div class="brief-section">
+      <div class="brief-section-header">
+        <span class="brief-section-header-icon">&#9783;</span>
+        Latest Daily Summary
+      </div>
+      <div id="brief-daily-container">
+        <div class="brief-empty">No daily summary available yet. The agent will generate one at the end of each day.</div>
+      </div>
+    </div>
+
+    <!-- Latest weekly report -->
+    <div class="brief-section">
+      <div class="brief-section-header">
+        <span class="brief-section-header-icon">&#9783;</span>
+        Latest Weekly Report
+      </div>
+      <div id="brief-weekly-container">
+        <div class="brief-empty">No weekly report available yet. Generated each Monday.</div>
+      </div>
+    </div>
   </div>
 
   <!-- Thinking Panel -->
@@ -4668,6 +5018,287 @@ svg#main-viz {
       li.className = 'alloc-legend-item';
       li.innerHTML = `<span class="alloc-dot" style="background:${PALETTE[colorKey].base}"></span>${escapeHtml(goal.name)}`;
       legend.appendChild(li);
+    });
+  }
+
+  // ----------------------------------------------------------
+  // Owner Brief Panel
+  // ----------------------------------------------------------
+  let briefData = null;
+
+  function fetchBrief() {
+    fetch(API_BASE + '/api/brief')
+      .then(r => r.json())
+      .then(data => {
+        briefData = data;
+        renderBrief(data);
+      })
+      .catch(() => {
+        // API unavailable — render demo brief
+        renderBriefDemo();
+      });
+  }
+
+  function renderBrief(data) {
+    // --- Status banner ---
+    const bannerEl = document.getElementById('brief-status-banner');
+    const dotEl = document.getElementById('brief-status-dot');
+    const textEl = document.getElementById('brief-status-text');
+    const gradeEl = document.getElementById('brief-status-grade');
+
+    if (bannerEl && data.status) {
+      const color = (data.status.color || 'GREEN').toLowerCase();
+      bannerEl.className = 'brief-status-banner ' + color;
+      dotEl.className = 'brief-status-dot ' + color;
+      textEl.textContent = data.status.short || 'System is running.';
+      gradeEl.textContent = 'Grade: ' + (data.status.grade || '?');
+    }
+
+    // --- Attention needed ---
+    const attEl = document.getElementById('brief-attention');
+    if (attEl && data.attention) {
+      if (data.attention.needed === 'yes' || data.attention.needed === 'optional') {
+        attEl.style.display = 'flex';
+        attEl.className = 'brief-attention ' + (data.attention.needed === 'yes' ? 'urgent' : 'optional');
+        document.getElementById('brief-attention-text').textContent = data.attention.text || '';
+        const urgEl = document.getElementById('brief-attention-urgency');
+        if (urgEl) {
+          urgEl.textContent = data.attention.urgency || '';
+          urgEl.style.display = data.attention.urgency ? '' : 'none';
+        }
+        // Set icon
+        const iconEl = attEl.querySelector('.brief-attention-icon');
+        if (iconEl) iconEl.textContent = data.attention.needed === 'yes' ? '\u26A0' : '\u2139';
+      } else {
+        attEl.style.display = 'none';
+      }
+    }
+
+    // --- Cycle badge ---
+    const cycleEl = document.getElementById('brief-cycle-badge');
+    if (cycleEl && data.doing) {
+      if (data.doing.cycle) {
+        cycleEl.style.display = 'inline-block';
+        const phaseText = data.doing.phase ? ' \u2014 ' + data.doing.phase : '';
+        cycleEl.textContent = 'Cycle ' + data.doing.cycle + phaseText;
+      } else {
+        cycleEl.style.display = 'none';
+      }
+    }
+
+    // --- What it's doing ---
+    const doingEl = document.getElementById('brief-doing-container');
+    if (doingEl && data.doing) {
+      doingEl.innerHTML = '';
+
+      // Current task
+      if (data.doing.currentTask) {
+        const taskDiv = document.createElement('div');
+        taskDiv.style.cssText = 'font-size:13px;color:var(--text-primary);font-weight:500;margin-bottom:8px;line-height:1.4;';
+        taskDiv.textContent = data.doing.currentTask;
+        doingEl.appendChild(taskDiv);
+      }
+
+      // Recent items
+      const items = data.doing.recentItems || [];
+      if (items.length > 0) {
+        const label = document.createElement('div');
+        label.style.cssText = 'font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:4px;margin-top:4px;';
+        label.textContent = data.doing.latestLogTitle || 'Recent Activity';
+        doingEl.appendChild(label);
+        items.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'brief-recent-item';
+          div.textContent = item;
+          doingEl.appendChild(div);
+        });
+      }
+
+      if (!data.doing.currentTask && items.length === 0) {
+        doingEl.innerHTML = '<div class="brief-empty">No activity data available yet.</div>';
+      }
+    }
+
+    // --- Goals ---
+    const goalsEl = document.getElementById('brief-goals-container');
+    if (goalsEl && data.goals) {
+      goalsEl.innerHTML = '';
+      if (data.goals.length === 0) {
+        goalsEl.innerHTML = '<div class="brief-empty">No goal data available.</div>';
+      } else {
+        data.goals.forEach(g => {
+          const row = document.createElement('div');
+          row.className = 'brief-goal-row';
+
+          const dot = document.createElement('div');
+          dot.className = 'brief-goal-dot ' + (g.color || 'blue');
+
+          const info = document.createElement('div');
+          info.className = 'brief-goal-info';
+
+          const name = document.createElement('div');
+          name.className = 'brief-goal-name';
+          name.textContent = g.name;
+
+          const detail = document.createElement('div');
+          detail.className = 'brief-goal-detail';
+          detail.textContent = g.detail;
+
+          info.appendChild(name);
+          info.appendChild(detail);
+
+          const badge = document.createElement('div');
+          badge.className = 'brief-goal-status-badge ' + (g.status === 'Paused' ? 'paused' : 'active');
+          badge.textContent = g.status;
+
+          row.appendChild(dot);
+          row.appendChild(info);
+          row.appendChild(badge);
+          goalsEl.appendChild(row);
+        });
+      }
+    }
+
+    // --- Thinking ---
+    const thinkEl = document.getElementById('brief-thinking-container');
+    if (thinkEl && data.thinking) {
+      thinkEl.innerHTML = '';
+      if (data.thinking.length === 0) {
+        thinkEl.innerHTML = '<div class="brief-empty">Not enough data yet to describe thinking patterns.</div>';
+      } else {
+        data.thinking.forEach(point => {
+          const div = document.createElement('div');
+          div.className = 'brief-thinking-item';
+          div.textContent = point;
+          thinkEl.appendChild(div);
+        });
+      }
+    }
+
+    // --- Daily summary ---
+    const dailyEl = document.getElementById('brief-daily-container');
+    if (dailyEl) {
+      dailyEl.innerHTML = '';
+      if (data.dailySummary) {
+        const card = document.createElement('div');
+        card.className = 'brief-report-card';
+        card.innerHTML =
+          '<div class="brief-report-card-header">' +
+            '<span class="brief-report-card-title">Daily Summary</span>' +
+            '<span class="brief-report-card-date">' + escapeHtml(data.dailySummary.date) + '</span>' +
+          '</div>' +
+          '<div class="brief-report-card-preview" id="brief-daily-preview">' +
+            escapeHtml(data.dailySummary.content.substring(0, 400)) +
+          '</div>';
+        card.addEventListener('click', function() {
+          const preview = this.querySelector('.brief-report-card-preview');
+          if (preview) {
+            if (preview.classList.contains('brief-report-expanded')) {
+              preview.classList.remove('brief-report-expanded');
+              preview.textContent = data.dailySummary.content.substring(0, 400);
+            } else {
+              preview.classList.add('brief-report-expanded');
+              preview.textContent = data.dailySummary.content;
+            }
+          }
+        });
+        dailyEl.appendChild(card);
+      } else if (data.logDailySummary) {
+        // Fallback: daily summary block from LOG.md
+        const card = document.createElement('div');
+        card.className = 'brief-report-card';
+        card.innerHTML =
+          '<div class="brief-report-card-header">' +
+            '<span class="brief-report-card-title">Daily Summary (from log)</span>' +
+            '<span class="brief-report-card-date">today</span>' +
+          '</div>' +
+          '<div class="brief-report-card-preview">' +
+            escapeHtml(data.logDailySummary.substring(0, 400)) +
+          '</div>';
+        card.addEventListener('click', function() {
+          const preview = this.querySelector('.brief-report-card-preview');
+          if (preview) {
+            preview.classList.toggle('brief-report-expanded');
+            preview.textContent = preview.classList.contains('brief-report-expanded')
+              ? data.logDailySummary
+              : data.logDailySummary.substring(0, 400);
+          }
+        });
+        dailyEl.appendChild(card);
+      } else {
+        dailyEl.innerHTML = '<div class="brief-empty">No daily summary available yet. The agent will generate one at the end of each day.</div>';
+      }
+    }
+
+    // --- Weekly report ---
+    const weeklyEl = document.getElementById('brief-weekly-container');
+    if (weeklyEl) {
+      weeklyEl.innerHTML = '';
+      if (data.weeklyReport) {
+        const card = document.createElement('div');
+        card.className = 'brief-report-card';
+
+        const gradeText = data.weeklyReport.grade ? escapeHtml(data.weeklyReport.grade) : '';
+        const summaryText = data.weeklyReport.summary ? escapeHtml(data.weeklyReport.summary.substring(0, 300)) : '';
+
+        card.innerHTML =
+          '<div class="brief-report-card-header">' +
+            '<span class="brief-report-card-title">Weekly Report</span>' +
+            '<span class="brief-report-card-date">' + escapeHtml(data.weeklyReport.date) + '</span>' +
+          '</div>' +
+          (gradeText ? '<div style="font-size:12px;font-weight:600;color:var(--accent-amber);margin-bottom:4px;">' + gradeText + '</div>' : '') +
+          '<div class="brief-report-card-preview">' + summaryText + '</div>';
+
+        card.addEventListener('click', function() {
+          const preview = this.querySelector('.brief-report-card-preview');
+          if (preview) {
+            if (preview.classList.contains('brief-report-expanded')) {
+              preview.classList.remove('brief-report-expanded');
+              preview.textContent = data.weeklyReport.summary.substring(0, 300);
+            } else {
+              preview.classList.add('brief-report-expanded');
+              preview.textContent = data.weeklyReport.content;
+            }
+          }
+        });
+        weeklyEl.appendChild(card);
+      } else {
+        weeklyEl.innerHTML = '<div class="brief-empty">No weekly report available yet. Generated each Monday.</div>';
+      }
+    }
+  }
+
+  function renderBriefDemo() {
+    // Render a demo brief when API is unavailable
+    renderBrief({
+      status: {
+        color: 'GREEN',
+        grade: 'B',
+        short: 'System is running in demo mode. Connect to the live server to see real data.',
+      },
+      attention: { needed: 'no', text: '', urgency: '' },
+      doing: {
+        cycle: null,
+        currentTask: '',
+        phase: '',
+        recentItems: [
+          'Dashboard is running in offline/demo mode',
+          'Connect to the VPS server to see live agent data',
+        ],
+        latestLogTitle: 'Demo Mode',
+      },
+      goals: [
+        { name: 'Self-Improvement', status: 'Active', detail: 'Demo goal — connect to live server for real data.', color: 'blue' },
+        { name: 'GUI Improvement', status: 'Active', detail: 'Demo goal — this is what you are looking at right now.', color: 'green' },
+      ],
+      thinking: [
+        'In demo mode, no real thinking data is available.',
+        'When connected, this section shows how the agent reasons about its work.',
+      ],
+      dailySummary: null,
+      logDailySummary: null,
+      weeklyReport: null,
+      dailySummaryCount: 0,
     });
   }
 
@@ -7199,8 +7830,9 @@ svg#main-viz {
           const data = JSON.parse(e.data);
           document.getElementById('raw-state').textContent = data.content || JSON.stringify(data, null, 2);
           addFeedEntry('state', 'State file updated');
-          // Refresh summary when state changes
+          // Refresh summary and brief when state changes
           fetchSummary();
+          fetchBrief();
         } catch(err) { console.warn('SSE parse error:', err); }
       });
 
@@ -7212,8 +7844,9 @@ svg#main-viz {
           if (entries.length > 0) {
             addFeedEntry('log', entries[0].text || entries[0].content || 'Log updated');
           }
-          // Refresh summary when log changes
+          // Refresh summary and brief when log changes
           fetchSummary();
+          fetchBrief();
         } catch(err) { console.warn('SSE parse error:', err); }
       });
 
@@ -8143,6 +8776,9 @@ Auth: tokens refreshed, no anomalies`;
     updateFreshnessIndicator();
 
     updateSystemPanel();
+
+    // Seed brief panel with demo data
+    renderBriefDemo();
 
     // Seed activity feed
     addFeedEntry('system', 'Dashboard initialized (demo mode)');
@@ -9543,6 +10179,7 @@ Auth: tokens refreshed, no anomalies`;
       updateTokenChart();
       updateFreshnessIndicator();
       fetchSummary();
+      fetchBrief();
       fetchGlossary();
       requestAnimationFrame(animate);
       connectSSE();

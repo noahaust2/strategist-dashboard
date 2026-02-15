@@ -10,6 +10,7 @@ Endpoints:
     GET /api/git     → commits, goal distribution, daily activity
     GET /api/summary → plain-English system summary (cycle, goals, log, metrics,
                        predictions, token tracking, health scorecard)
+    GET /api/brief   → owner-facing brief (health, doing, thinking, daily/weekly reports)
     GET /api/glossary→ definitions for key system terms
     GET /api/daydream→ D3-compatible node-link graph
     GET /api/security→ security events, wrapper events, backup status
@@ -1136,6 +1137,275 @@ def _compute_attention(goal_health: list, metrics: dict, grade: str) -> tuple:
         if pending:
             return ("optional", " | ".join(pending), "WHENEVER CONVENIENT")
         return ("no", "System running well on its own. No action needed.", "")
+
+
+# ── User Brief (plain-English summary system) ──────────────────────────────
+
+def build_user_brief() -> dict:
+    """Build a plain-English brief for the owner.
+
+    Answers three questions:
+      1. Is it healthy?
+      2. What's it doing?
+      3. How's it thinking?
+
+    Also loads the latest daily summary and weekly report from
+    .planning/reports/ if they exist.
+    """
+    planning_dir = os.path.join(PROJECT_DIR, ".planning")
+    reports_dir = os.path.join(planning_dir, "reports")
+
+    # --- Health scorecard for status ---
+    health = parse_health_scorecard()
+    grade = health.get("grade", "B")
+    grade_desc = health.get("gradeDesc", "")
+    goal_health = health.get("goalHealth", [])
+    attention = health.get("attention", "no")
+    attention_text = health.get("attentionText", "")
+    attention_urgency = health.get("attentionUrgency", "")
+
+    # Map grade to status color
+    if grade in ("A",):
+        status_color = "GREEN"
+        status_short = "System is healthy and productive."
+    elif grade in ("B",):
+        status_color = "GREEN"
+        status_short = grade_desc or "Mostly healthy. Running well."
+    elif grade in ("C",):
+        status_color = "YELLOW"
+        status_short = grade_desc or "Some areas need attention."
+    else:
+        status_color = "RED"
+        status_short = grade_desc or "System needs attention."
+
+    # --- What's it doing? (from STATE.md + LOG.md) ---
+    state_text = _read_file(os.path.join(planning_dir, "STATE.md")) or ""
+    log_text = _read_file(os.path.join(planning_dir, "LOG.md")) or ""
+
+    # Extract current cycle
+    cycle_number = None
+    current_task = ""
+    current_phase = ""
+    for line in state_text.splitlines():
+        lower = line.lower()
+        if cycle_number is None:
+            m = re.search(r"cycle[:\s]+(\d+)", lower)
+            if m:
+                cycle_number = int(m.group(1))
+        if "current task" in lower or "working on" in lower:
+            current_task = line.split(":", 1)[-1].strip() if ":" in line else ""
+        if "phase" in lower and ":" in line:
+            current_phase = line.split(":", 1)[-1].strip()
+
+    # Get recent accomplishments from LOG.md (latest entry)
+    log_sections = re.split(r"(?=^## )", log_text, flags=re.MULTILINE)
+    recent_items = []
+    latest_entry_title = ""
+    for section in reversed(log_sections):
+        if section.strip():
+            lines = section.strip().splitlines()
+            if lines:
+                latest_entry_title = lines[0].lstrip("#").strip()
+            for line in lines:
+                if line.strip().startswith("- ") and len(recent_items) < 5:
+                    item = line.strip().lstrip("- ").strip()
+                    # Skip internal jargon lines (file paths, technical refs)
+                    if item and not item.startswith("/") and not item.startswith("```"):
+                        recent_items.append(item)
+            break
+
+    # --- Active goals with plain status ---
+    goals_plain = []
+    for g in goal_health:
+        name = g.get("name", "Unknown")
+        status = g.get("status", "active")
+        conf = g.get("confidence", "N/A")
+        trend = g.get("trend", "flat")
+        mode = g.get("mode", "")
+
+        if status == "paused":
+            goals_plain.append({
+                "name": name,
+                "status": "Paused",
+                "detail": "On hold for now.",
+                "color": "muted",
+            })
+        else:
+            # Translate confidence to plain English
+            if conf != "N/A":
+                try:
+                    conf_val = int(conf.rstrip("%"))
+                    if conf_val >= 70:
+                        conf_text = "Confident it's on the right track."
+                    elif conf_val >= 40:
+                        conf_text = "Making progress, still figuring out the best approach."
+                    else:
+                        conf_text = "Still early — exploring and learning."
+                except ValueError:
+                    conf_text = ""
+            else:
+                conf_text = "Running normally."
+
+            # Translate trend
+            trend_text = ""
+            if trend == "up":
+                trend_text = "Getting better."
+            elif trend == "down":
+                trend_text = "Needs attention — progress slowing."
+
+            # Translate mode
+            mode_text = ""
+            if mode == "understanding":
+                mode_text = "Currently in learning mode."
+            elif mode == "action":
+                mode_text = "Actively producing work."
+            elif mode == "background":
+                mode_text = "Running quietly in the background."
+
+            detail_parts = [p for p in [conf_text, trend_text, mode_text] if p]
+            goals_plain.append({
+                "name": name,
+                "status": "Active",
+                "detail": " ".join(detail_parts) or "Working normally.",
+                "color": "green" if trend == "up" else ("yellow" if trend == "down" else "blue"),
+            })
+
+    # --- How's it thinking? (from latest reasoning / metrics) ---
+    metrics = health.get("metrics", {})
+    thinking_points = []
+
+    # Prediction accuracy
+    pred_acc = metrics.get("predictionAccuracy", "N/A")
+    pred_total = metrics.get("predictionTotal", 0)
+    if pred_acc != "N/A" and pred_total > 0:
+        thinking_points.append(
+            f"Made {pred_total} predictions so far, with {pred_acc} accuracy."
+        )
+    elif pred_total > 0:
+        thinking_points.append(f"Made {pred_total} predictions — not enough resolved yet to measure accuracy.")
+
+    # Self-correction
+    self_caught = metrics.get("selfCaught", 0)
+    owner_caught = metrics.get("ownerCaught", 0)
+    if self_caught or owner_caught:
+        total_errors = self_caught + owner_caught
+        if total_errors > 0:
+            self_pct = round(self_caught / total_errors * 100)
+            thinking_points.append(
+                f"Catches {self_pct}% of its own mistakes ({self_caught} self-caught vs {owner_caught} owner-caught)."
+            )
+
+    # Failure modes
+    failure_modes = metrics.get("failureModes", 0)
+    if failure_modes:
+        thinking_points.append(
+            f"Has cataloged {failure_modes} types of mistakes it knows to watch for."
+        )
+
+    # Fix validation
+    fix_validated = metrics.get("fixValidated", 0)
+    fix_total = metrics.get("fixTotal", 0)
+    if fix_total > 0:
+        thinking_points.append(
+            f"Built {fix_total} behavioral fixes, {fix_validated} confirmed working."
+        )
+
+    # Improvement trajectory
+    improving = health.get("improving", "maybe")
+    speed = health.get("speed", "steady")
+    if improving == "yes":
+        if speed == "accelerating":
+            thinking_points.append("Getting better faster each week.")
+        else:
+            thinking_points.append("Steadily improving over time.")
+    elif improving == "maybe":
+        thinking_points.append("Still building up enough data to measure improvement clearly.")
+
+    # --- Load latest daily summary from reports/ ---
+    daily_summary = None
+    daily_summaries = []
+    if os.path.isdir(reports_dir):
+        for fname in sorted(os.listdir(reports_dir), reverse=True):
+            if fname.startswith("daily-") and fname.endswith(".md"):
+                daily_summaries.append(fname)
+        if daily_summaries:
+            latest_daily = os.path.join(reports_dir, daily_summaries[0])
+            text = _read_file(latest_daily)
+            if text:
+                daily_summary = {
+                    "filename": daily_summaries[0],
+                    "date": daily_summaries[0].replace("daily-", "").replace(".md", ""),
+                    "content": text,
+                }
+
+    # --- Load latest weekly report from reports/ ---
+    weekly_report = None
+    if os.path.isdir(reports_dir):
+        weekly_files = sorted(
+            [f for f in os.listdir(reports_dir) if f.startswith("weekly-") and f.endswith(".md")],
+            reverse=True,
+        )
+        if weekly_files:
+            latest_weekly = os.path.join(reports_dir, weekly_files[0])
+            text = _read_file(latest_weekly)
+            if text:
+                # Extract just the summary/grade section for the brief
+                grade_line = ""
+                summary_lines = []
+                in_summary = False
+                for line in text.splitlines():
+                    if "OVERALL GRADE" in line.upper():
+                        grade_line = line
+                        in_summary = True
+                        continue
+                    if in_summary:
+                        if line.startswith("---"):
+                            break
+                        summary_lines.append(line)
+
+                weekly_report = {
+                    "filename": weekly_files[0],
+                    "date": weekly_files[0].replace("weekly-", "").replace(".md", ""),
+                    "grade": grade_line,
+                    "summary": "\n".join(summary_lines).strip(),
+                    "content": text,
+                }
+
+    # --- Also parse daily summary from LOG.md if no file exists ---
+    # Look for "## Daily Summary" blocks in LOG.md
+    log_daily_summary = None
+    if not daily_summary and log_text:
+        daily_blocks = re.split(r"(?=^## Daily Summary)", log_text, flags=re.MULTILINE)
+        for block in reversed(daily_blocks):
+            if block.strip().startswith("## Daily Summary"):
+                log_daily_summary = block.strip()
+                break
+
+    return {
+        "status": {
+            "color": status_color,
+            "grade": grade,
+            "short": status_short,
+        },
+        "attention": {
+            "needed": attention,
+            "text": attention_text,
+            "urgency": attention_urgency,
+        },
+        "doing": {
+            "cycle": cycle_number,
+            "currentTask": current_task,
+            "phase": current_phase,
+            "recentItems": recent_items,
+            "latestLogTitle": latest_entry_title,
+        },
+        "goals": goals_plain,
+        "thinking": thinking_points,
+        "dailySummary": daily_summary,
+        "logDailySummary": log_daily_summary,
+        "weeklyReport": weekly_report,
+        "dailySummaryCount": len(daily_summaries),
+    }
 
 
 GLOSSARY_TERMS = [
@@ -2505,6 +2775,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 "wrapper": parse_security_log(wrapper_path),
                 "backup": parse_json_file(backup_path),
             })
+
+        elif path == "/api/brief":
+            self._send_json(build_user_brief())
 
         elif path == "/api/summary":
             self._send_json(build_summary())

@@ -5,7 +5,7 @@ Last updated: 2026-02-14
 ## Overview
 
 This roadmap prioritizes improvements to the Strategist Dashboard based on a
-thorough analysis of `index.html` (~8500 lines) and `dashboard-server.py`
+thorough analysis of `index.html` (~9200 lines) and `dashboard-server.py`
 (~1750 lines). Each item is ranked by impact (how much it helps the user
 understand system health and activity) and effort (development time).
 
@@ -16,7 +16,7 @@ The dashboard's three core questions:
 
 ---
 
-## Completed (Implemented 2026-02-14)
+## Completed — Round 1 (2026-02-14)
 
 ### 1. Metrics & Predictions Panel
 **Impact: HIGH | Effort: MEDIUM | Status: DONE**
@@ -72,34 +72,89 @@ helps monitor costs over time.
 
 ---
 
-## Priority 1 — High Impact, Low-Medium Effort
+## Completed — Round 2 (2026-02-14)
 
-### 4. Re-enable or Replace Hidden Components
-**Impact: MEDIUM | Effort: LOW | Est: 2-4 hours**
+### 4. Hidden Components Audit & Cleanup
+**Impact: MEDIUM | Effort: LOW | Status: DONE**
 
-Several components exist in the DOM but are hidden with `display: none`:
-- Mission Status panel (line ~1502)
-- Thinking Ticker (line ~1631)
-- Activity Feed (line ~991)
-- Section Markers (line ~2001)
+Audited all components hidden with `display: none`:
 
-Additionally, the synapse tree and document constellation are commented out
-in the animation loop.
+**Removed (dead code):**
+- Section Markers (#marker-status, #marker-agents, #marker-thinking,
+  #marker-goals) — CSS + HTML removed entirely. These were numbered circles
+  on the canvas intended as a reading-flow guide. They were always hidden and
+  redundant with sidebar tab navigation. No JavaScript referenced them.
+  ~50 lines of CSS + 16 lines of HTML removed.
 
-**Recommendation:** Either re-enable the useful ones (Mission Status is
-redundant with the HUD; Activity Feed is redundant with the Logs tab) or
-remove them entirely to reduce dead code. The synapse tree could be a
-valuable visualization if moved to the System panel.
+**Kept hidden (documented why):**
+- Mission Status panel — Redundant with HUD bar. Cannot remove: 15+
+  `updateMissionStatus()` calls and extensive JS functions reference the DOM.
+  Added explanatory CSS comment.
+- Activity Feed — Redundant with sidebar Logs tab. Cannot remove: 20+
+  `addFeedEntry()` calls throughout the codebase serve as a data accumulator.
+  Added explanatory CSS comment.
+- Thinking Ticker — Redundant with sidebar Thinking tab and agent node hover
+  detail. Cannot remove: 10+ `updateThinkingTicker()` calls. Added
+  explanatory CSS comment.
+
+**Not touched (functional):**
+- Synapse tree and document constellation (commented out in animation loop) —
+  these are architecture-view features, not hidden components.
 
 ### 5. Connection Health with Reconnection Feedback
-**Impact: LOW-MEDIUM | Effort: LOW | Est: 1-2 hours**
+**Impact: LOW-MEDIUM | Effort: LOW | Status: DONE**
 
-SSE reconnection exists but the user only sees a small dot change color.
-More prominent connection status with retry countdown, error details, and
-time since last successful connection would reduce confusion during outages.
+Enhanced the SSE connection status indicator:
+- **Retry countdown**: Shows "retry 5s" next to the connection dot during
+  reconnection attempts, counting down in real-time
+- **Disconnection duration**: Shows "down Xm" when disconnected for >1 minute,
+  with a red background highlight on the connection status area
+- **State tracking**: New variables `connDisconnectedAt`, `connRetryTimer`,
+  `connRetryTarget` track disconnection lifecycle
+- **Automatic cleanup**: All disconnection UI clears on successful reconnect
+- Status text now reads "disconnected" (was "reconnecting") for clarity
 
-**Recommendation:** Add a reconnection countdown ("Retrying in 5s...") next to
-the connection dot. Show "Disconnected for Xm" when the gap exceeds 1 minute.
+*Files changed:* `index.html` (CSS, HTML, JavaScript)
+
+### 14. Health Scorecard Panel (NEW)
+**Impact: HIGH | Effort: MEDIUM | Status: DONE**
+
+Added a full Health Scorecard at the top of the Metrics panel, inspired by
+the User Comprehension goal's research template. Shows:
+- **Overall system grade** (A/B/C/D/F) with color-coded badge and plain
+  English description
+- **Per-goal health indicators**: colored dots (green/yellow/red) with trend
+  arrows (up/flat/down) and ACTIVE/PAUSED status badges
+- **Rate of improvement**: "Getting better?" (YES/MAYBE/NO), Speed
+  (Accelerating/Steady/Slowing/Stalled), Growth vitality
+- **Owner attention flag**: "No action needed" (green) or specific actionable
+  request (amber/red) with urgency level
+
+Grading algorithm considers:
+- System health status (green/yellow/red)
+- Per-goal commit activity (7-day window)
+- Colony particle staleness (stalled goals)
+- Prediction accuracy (when available)
+- Context window pressure
+- Growth vitality trend
+
+Works in demo mode with realistic seed data showing grade B.
+
+*Files changed:* `index.html` (CSS, HTML, JavaScript)
+
+### 15. Enhanced Prediction Tracker (NEW)
+**Impact: MEDIUM | Effort: MEDIUM | Status: DONE**
+
+Replaced the basic prediction list with a structured tracker:
+- **Upcoming section**: Pending predictions with confidence badges (HIGH/MED/LOW),
+  color-coded by confidence level, "Due in Xd" countdown, confidence bar
+- **Resolved section**: HIT/MISS badges with confidence bars, sorted most
+  recent first
+- **Confidence visualization**: Small bar chart per prediction showing
+  confidence level (green=high, amber=medium, gray=low)
+- Demo data updated with confidence levels and future resolution dates
+
+*Files changed:* `index.html` (CSS, HTML, JavaScript)
 
 ---
 
@@ -176,12 +231,12 @@ outcomes. This is a new goal with no existing data pipeline.
 **Impact: MEDIUM | Effort: HIGH | Est: 15-20 hours**
 
 Currently predictions exist only in METRICS.md text. No structured pipeline
-for creating, tracking, and resolving predictions.
+for creating, tracking, and resolving predictions. (Frontend tracker now
+exists from item #15; backend pipeline still needed.)
 
 **Recommendation:**
 - Backend: Parse METRICS.md predictions into structured data
 - Backend: Track prediction outcomes over time in a JSON file
-- Frontend: Show prediction timeline with resolution rates
 - Frontend: Accuracy trend chart (rolling 30-day window)
 
 ### 12. Real-Time Token Budget Visualization
@@ -225,5 +280,5 @@ notifications, no sound, no desktop notifications.
 
 | File | Lines | Role |
 |------|-------|------|
-| `index.html` | ~8700 | Full SPA: CSS + HTML + JavaScript |
+| `index.html` | ~9200 | Full SPA: CSS + HTML + JavaScript |
 | `dashboard-server.py` | ~1750 | Backend: HTTP + SSE + file watchers |

@@ -987,7 +987,10 @@ svg#main-viz {
   letter-spacing: 0.05em;
 }
 
-/* Activity Feed — hidden (info available in sidebar Logs tab) */
+/* Activity Feed — KEPT HIDDEN (display:none). Redundant with sidebar Logs tab.
+   Cannot remove HTML/JS: 20+ addFeedEntry() calls throughout the codebase would
+   need refactoring. The feed-entries div and addFeedEntry function serve as a
+   data accumulator even when hidden. (Roadmap item #4 audit, Round 2) */
 #activity-feed {
   display: none;
 }
@@ -1726,6 +1729,321 @@ svg#main-viz {
 .staleness-banner.stale .staleness-dot { background: var(--accent-amber); }
 .staleness-banner.very-stale .staleness-dot { background: var(--health-red); }
 
+/* === TASK 1: Health Scorecard Panel === */
+.health-scorecard {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.scorecard-grade-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.scorecard-grade {
+  font-size: 36px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  line-height: 1;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.scorecard-grade.grade-a { background: rgba(34,197,94,0.15); color: var(--health-green); border: 2px solid var(--health-green); }
+.scorecard-grade.grade-b { background: rgba(74,158,255,0.15); color: var(--accent-blue); border: 2px solid var(--accent-blue); }
+.scorecard-grade.grade-c { background: rgba(245,158,11,0.15); color: var(--accent-amber); border: 2px solid var(--accent-amber); }
+.scorecard-grade.grade-d { background: rgba(239,68,68,0.15); color: var(--health-red); border: 2px solid var(--health-red); }
+.scorecard-grade.grade-f { background: rgba(239,68,68,0.25); color: var(--health-red); border: 2px solid var(--health-red); }
+
+.scorecard-grade-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.scorecard-grade-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+
+.scorecard-goals {
+  margin-bottom: 14px;
+}
+
+.scorecard-goal-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(42,42,58,0.3);
+}
+
+.scorecard-goal-row:last-child { border-bottom: none; }
+
+.scorecard-goal-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.scorecard-goal-dot.health-ok { background: var(--health-green); box-shadow: 0 0 6px rgba(34,197,94,0.4); }
+.scorecard-goal-dot.health-warn { background: var(--health-yellow); box-shadow: 0 0 6px rgba(234,179,8,0.4); }
+.scorecard-goal-dot.health-bad { background: var(--health-red); box-shadow: 0 0 6px rgba(239,68,68,0.4); }
+.scorecard-goal-dot.health-paused { background: var(--text-muted); opacity: 0.4; }
+
+.scorecard-goal-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scorecard-goal-trend {
+  font-size: 14px;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+}
+
+.scorecard-goal-trend.trend-up { color: var(--health-green); }
+.scorecard-goal-trend.trend-flat { color: var(--text-muted); }
+.scorecard-goal-trend.trend-down { color: var(--health-red); }
+
+.scorecard-goal-status {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.scorecard-goal-status.status-active { background: rgba(52,211,153,0.12); color: var(--accent-green); }
+.scorecard-goal-status.status-paused { background: rgba(96,96,128,0.15); color: var(--text-muted); }
+
+.scorecard-improvement {
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+.scorecard-improvement-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.scorecard-improvement-row:last-child { margin-bottom: 0; }
+
+.scorecard-improvement-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 110px;
+}
+
+.scorecard-improvement-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.scorecard-improvement-value.positive { color: var(--accent-green); }
+.scorecard-improvement-value.neutral { color: var(--text-secondary); }
+.scorecard-improvement-value.negative { color: var(--health-red); }
+
+.scorecard-attention {
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.scorecard-attention.no-action {
+  background: rgba(52,211,153,0.08);
+  border: 1px solid rgba(52,211,153,0.2);
+  color: var(--accent-green);
+}
+
+.scorecard-attention.action-needed {
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.2);
+  color: var(--accent-amber);
+}
+
+.scorecard-attention.urgent {
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.2);
+  color: var(--health-red);
+}
+
+.scorecard-attention-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* === TASK 2: Enhanced Prediction Tracker === */
+.prediction-tracker-section {
+  margin-bottom: 16px;
+}
+
+.prediction-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.prediction-section-count {
+  font-family: var(--font-mono);
+  color: var(--accent-cyan);
+}
+
+.prediction-enhanced-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(42,42,58,0.5);
+  font-size: 12px;
+}
+
+.prediction-enhanced-item:last-child { border-bottom: none; }
+
+.prediction-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  min-width: 42px;
+  text-align: center;
+}
+
+.prediction-badge.hit {
+  background: rgba(52,211,153,0.15);
+  color: var(--accent-green);
+}
+
+.prediction-badge.miss {
+  background: rgba(239,68,68,0.15);
+  color: var(--health-red);
+}
+
+.prediction-badge.pending-high {
+  background: rgba(74,158,255,0.15);
+  color: var(--accent-blue);
+}
+
+.prediction-badge.pending-med {
+  background: rgba(245,158,11,0.12);
+  color: var(--accent-amber);
+}
+
+.prediction-badge.pending-low {
+  background: rgba(96,96,128,0.12);
+  color: var(--text-muted);
+}
+
+.prediction-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.prediction-body-text {
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.prediction-body-meta {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.prediction-confidence {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.prediction-conf-bar {
+  width: 30px;
+  height: 4px;
+  background: var(--bg-primary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.prediction-conf-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+
+.prediction-conf-fill.high { background: var(--accent-green); }
+.prediction-conf-fill.medium { background: var(--accent-amber); }
+.prediction-conf-fill.low { background: var(--text-muted); }
+
+/* === TASK 4: Connection Health Improvement === */
+#conn-detail {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+#connection-status.disconnected-banner {
+  background: rgba(239,68,68,0.1);
+  border-radius: 4px;
+  padding: 2px 8px;
+  border: 1px solid rgba(239,68,68,0.2);
+}
+
+.conn-retry-text {
+  color: var(--accent-amber);
+  font-weight: 600;
+}
+
+.conn-duration-text {
+  color: var(--health-red);
+}
+
 /* Mobile */
 @media (max-width: 768px) {
   #sidebar { width: 100vw; }
@@ -1739,11 +2057,13 @@ svg#main-viz {
   #activity-feed { width: calc(100vw - 48px); left: 12px; }
   #mission-status { width: calc(100vw - 48px); left: 12px; }
   #thinking-ticker { width: calc(100vw - 48px); right: 12px; }
-  .section-marker { display: none; }
   #legend { flex-wrap: wrap; width: calc(100vw - 48px); margin-bottom: 40px; }
 }
 
-/* Mission Status Panel — always visible, left side */
+/* Mission Status Panel — KEPT HIDDEN (display:none). Redundant with HUD bar
+   which shows the same phase/task/goal info more compactly. Cannot remove: 15+
+   updateMissionStatus() calls and extensive JS functions reference this DOM.
+   (Roadmap item #4 audit, Round 2) */
 #mission-status {
   display: none;
 }
@@ -1872,7 +2192,9 @@ svg#main-viz {
   margin-top: 3px;
 }
 
-/* Thinking ticker — hidden (info available in sidebar + node hover) */
+/* Thinking ticker — KEPT HIDDEN (display:none). Redundant with sidebar Thinking
+   tab and agent node hover detail. Cannot remove: 10+ updateThinkingTicker()
+   calls throughout the codebase. (Roadmap item #4 audit, Round 2) */
 #thinking-ticker {
   display: none;
 }
@@ -2242,57 +2564,9 @@ svg#main-viz {
   background: var(--border-subtle);
 }
 
-/* ── Section Markers (numbered circles) ────────────────── */
-.section-marker {
-  display: none;
-}
-
-.section-number {
-  width: 22px; height: 22px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700;
-  font-family: var(--font-mono);
-  flex-shrink: 0;
-}
-
-.section-label {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--text-muted);
-  white-space: nowrap;
-  font-family: var(--font-mono);
-}
-
-#marker-status {
-  top: 62px; left: 28px;
-}
-#marker-status .section-number {
-  background: rgba(34,211,238,0.15); color: var(--accent-cyan);
-}
-
-#marker-agents {
-  top: 62px; left: 50%;
-  transform: translateX(-50%);
-}
-#marker-agents .section-number {
-  background: rgba(74,158,255,0.15); color: var(--accent-blue);
-}
-
-#marker-thinking {
-  bottom: 228px; right: 28px;
-}
-#marker-thinking .section-number {
-  background: rgba(167,139,250,0.15); color: var(--accent-violet);
-}
-
-#marker-goals {
-  bottom: 270px; left: 50%;
-  transform: translateX(-50%);
-}
-#marker-goals .section-number {
-  background: rgba(52,211,153,0.15); color: var(--accent-green);
-}
+/* Section markers removed in Round 2 — they were always hidden (display:none)
+   and are redundant with the sidebar tabs which provide the same navigation.
+   See IMPROVEMENT-ROADMAP.md item #4 for rationale. */
 
 /* HUD phase indicator */
 #hud-phase {
@@ -2375,23 +2649,7 @@ svg#main-viz {
   </div>
 </div>
 
-<!-- Section Markers (numbered reading flow) -->
-<div class="section-marker" id="marker-status">
-  <span class="section-number">1</span>
-  <span class="section-label">Current Status</span>
-</div>
-<div class="section-marker" id="marker-agents">
-  <span class="section-number">2</span>
-  <span class="section-label">Agent Architecture</span>
-</div>
-<div class="section-marker" id="marker-thinking">
-  <span class="section-number">3</span>
-  <span class="section-label">Decision Flow</span>
-</div>
-<div class="section-marker" id="marker-goals">
-  <span class="section-number">4</span>
-  <span class="section-label">Goal Clusters</span>
-</div>
+<!-- Section markers removed in Round 2 (were always display:none, redundant with sidebar tabs) -->
 
 <!-- Legend -->
 <div id="legend">
@@ -2514,6 +2772,7 @@ svg#main-viz {
     <div id="connection-status" title="Whether this dashboard is receiving live updates from the server">
       <div id="conn-dot" class="connecting"></div>
       <span id="conn-text">connecting</span>
+      <span id="conn-detail"></span>
     </div>
   </div>
 </div>
@@ -2676,7 +2935,12 @@ svg#main-viz {
 
   <!-- Metrics & Predictions Panel -->
   <div class="sidebar-panel" id="panel-metrics">
-    <div class="panel-header">Performance Metrics</div>
+    <div class="panel-header">System Health Scorecard</div>
+    <div id="health-scorecard-container">
+      <div style="font-size:12px;color:var(--text-muted);">Computing health scorecard...</div>
+    </div>
+
+    <div class="panel-header" style="margin-top:16px;">Performance Metrics</div>
     <div class="metrics-grid" id="metrics-kpi-grid">
       <div class="metrics-card">
         <div class="metrics-card-value" id="metrics-cycles">--</div>
@@ -2709,8 +2973,8 @@ svg#main-viz {
       <div class="token-bars" id="token-bars"></div>
     </div>
 
-    <div class="panel-header">Recent Predictions</div>
-    <div id="predictions-container">
+    <div class="panel-header">Prediction Tracker</div>
+    <div id="prediction-tracker-container">
       <div style="font-size:12px;color:var(--text-muted);">No prediction data available</div>
     </div>
 
@@ -4745,25 +5009,9 @@ svg#main-viz {
     const predEl = document.getElementById('metrics-predictions');
     if (predEl) predEl.textContent = m.predictionCount || '--';
 
-    // Predictions list
-    const container = document.getElementById('predictions-container');
-    if (container && state.predictions.length > 0) {
-      container.innerHTML = '';
-      state.predictions.slice(-10).reverse().forEach(p => {
-        const item = document.createElement('div');
-        item.className = 'prediction-item';
-        const outcomeClass = p.outcome === 'correct' ? 'correct' : p.outcome === 'incorrect' ? 'incorrect' : 'pending';
-        const outcomeLabel = p.outcome === 'correct' ? 'HIT' : p.outcome === 'incorrect' ? 'MISS' : 'PENDING';
-        item.innerHTML = `
-          <span class="prediction-outcome ${outcomeClass}">${outcomeLabel}</span>
-          <span class="prediction-text">${escapeHtml(p.text || '')}</span>
-          ${p.date ? '<span class="prediction-date">' + escapeHtml(p.date) + '</span>' : ''}
-        `;
-        container.appendChild(item);
-      });
-    } else if (container && state.predictions.length === 0) {
-      container.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">No prediction data available</div>';
-    }
+    // Update enhanced prediction tracker and health scorecard
+    updatePredictionTracker();
+    updateHealthScorecard();
 
     // Health summary text
     const healthEl = document.getElementById('metrics-health-summary');
@@ -4791,6 +5039,316 @@ svg#main-viz {
 
       healthEl.innerHTML = parts.join('<br>');
     }
+  }
+
+  // ----------------------------------------------------------
+  // TASK 1: Health Scorecard Panel
+  // ----------------------------------------------------------
+  function computeScorecard() {
+    const m = state.metricsData;
+    const goals = state.goals.length > 0 ? state.goals : [];
+
+    // Compute per-goal health based on available data
+    const goalHealthItems = [];
+    goals.forEach(g => {
+      const colony = state.colonies.get(g.id);
+      let healthStatus = 'ok'; // green
+      let trend = 'flat';
+      let status = 'active';
+
+      // Check if goal has recent commits
+      const recentCommits = g.commits7d || 0;
+      if (recentCommits === 0) {
+        healthStatus = 'warn'; // yellow — no recent activity
+        trend = 'down';
+      } else if (recentCommits > 5) {
+        healthStatus = 'ok';
+        trend = 'up';
+      }
+
+      // Check colony for stalled particles
+      if (colony && colony.particles) {
+        const recentParticles = colony.particles.filter(p => p.age < 3).length;
+        if (colony.particles.length > 0 && recentParticles === 0) {
+          healthStatus = 'bad'; // red — stalled
+          trend = 'down';
+        }
+      }
+
+      // Progress-based assessment
+      if (g.progress !== undefined) {
+        if (g.progress >= 70) trend = trend !== 'down' ? 'up' : trend;
+      }
+
+      // Check for paused status (name contains "paused" or zero everything)
+      if (g.name && g.name.toLowerCase().includes('paused')) {
+        status = 'paused';
+        healthStatus = 'paused';
+        trend = 'flat';
+      }
+
+      goalHealthItems.push({
+        name: g.name || g.id,
+        health: healthStatus,
+        trend: trend,
+        status: status,
+      });
+    });
+
+    // Compute overall grade
+    const redCount = goalHealthItems.filter(g => g.health === 'bad').length;
+    const yellowCount = goalHealthItems.filter(g => g.health === 'warn').length;
+    const activeCount = goalHealthItems.filter(g => g.status === 'active').length;
+
+    let grade = 'B';
+    let gradeDesc = 'Mostly good, one or two things to watch.';
+
+    // System health factors
+    const isHealthRed = state.health === 'red';
+    const isHealthYellow = state.health === 'yellow';
+
+    // Accuracy factor
+    const accuracy = m.accuracyRate && m.accuracyRate !== 'N/A' ? parseFloat(m.accuracyRate) : null;
+
+    // Context pressure
+    const total = (state.context.system || 0) + (state.context.conversation || 0) +
+                  (state.context.tools || 0) + (state.context.thinking || 0);
+    const ctxPct = total / (state.context.max || 200000);
+
+    // Growth vitality
+    const growth = computeGrowthVitality();
+
+    if (isHealthRed || redCount >= 2) {
+      grade = 'F';
+      gradeDesc = 'Critical issues detected. The system may not be functioning properly.';
+    } else if (isHealthRed || (redCount >= 1 && yellowCount >= 1)) {
+      grade = 'D';
+      gradeDesc = 'Significant issues need attention. Some goals are stalled.';
+    } else if (isHealthYellow || yellowCount >= 2 || (accuracy !== null && accuracy < 50)) {
+      grade = 'C';
+      gradeDesc = 'Some problems detected. Worth checking the concerns below.';
+    } else if (redCount === 0 && yellowCount <= 1 && !isHealthYellow) {
+      if (growth.label === 'thriving' || growth.label === 'active') {
+        if (accuracy === null || accuracy >= 70) {
+          grade = 'A';
+          gradeDesc = 'Everything working well and improving steadily.';
+        } else {
+          grade = 'B';
+          gradeDesc = 'Healthy overall. Prediction accuracy could be higher.';
+        }
+      } else {
+        grade = 'B';
+        gradeDesc = 'Mostly good. Growth could be stronger.';
+      }
+    }
+
+    // Rate of improvement
+    let improving = 'maybe';
+    let speed = 'steady';
+    if (growth.label === 'thriving') { improving = 'yes'; speed = 'accelerating'; }
+    else if (growth.label === 'active') { improving = 'yes'; speed = 'steady'; }
+    else if (growth.label === 'slowing') { improving = 'maybe'; speed = 'slowing'; }
+    else if (growth.label === 'dormant') { improving = 'no'; speed = 'stalled'; }
+
+    // Owner attention needed?
+    let attention = 'no';
+    let attentionText = 'The system is running well on its own. No action needed.';
+    let attentionUrgency = '';
+    if (grade === 'F' || grade === 'D') {
+      attention = 'yes';
+      attentionText = redCount > 0
+        ? redCount + ' goal(s) are stalled with no recent progress.'
+        : 'System health is degraded. Check logs for errors.';
+      attentionUrgency = grade === 'F' ? 'NOW' : 'THIS WEEK';
+    } else if (grade === 'C') {
+      attention = 'optional';
+      attentionText = 'Some areas need watching. Not urgent but worth a look.';
+      attentionUrgency = 'WHENEVER CONVENIENT';
+    }
+
+    return {
+      grade,
+      gradeDesc,
+      goalHealthItems,
+      improving,
+      speed,
+      attention,
+      attentionText,
+      attentionUrgency,
+      ctxPct: Math.round(ctxPct * 100),
+      agentCount: state.agents.size,
+      growthLabel: growth.label,
+    };
+  }
+
+  function updateHealthScorecard() {
+    const container = document.getElementById('health-scorecard-container');
+    if (!container) return;
+
+    const sc = computeScorecard();
+
+    let html = '<div class="health-scorecard">';
+
+    // Overall grade row
+    html += '<div class="scorecard-grade-row">';
+    html += '<div class="scorecard-grade grade-' + sc.grade.toLowerCase() + '">' + sc.grade + '</div>';
+    html += '<div>';
+    html += '<div class="scorecard-grade-label">Overall System Grade</div>';
+    html += '<div class="scorecard-grade-desc">' + escapeHtml(sc.gradeDesc) + '</div>';
+    html += '</div>';
+    html += '</div>';
+
+    // Goal health rows
+    if (sc.goalHealthItems.length > 0) {
+      html += '<div class="scorecard-goals">';
+      sc.goalHealthItems.forEach(g => {
+        const trendSymbol = g.trend === 'up' ? '\u2191' : g.trend === 'down' ? '\u2193' : '\u2192';
+        const trendClass = 'trend-' + g.trend;
+        const dotClass = g.health === 'ok' ? 'health-ok'
+          : g.health === 'warn' ? 'health-warn'
+          : g.health === 'bad' ? 'health-bad'
+          : 'health-paused';
+        const statusClass = g.status === 'paused' ? 'status-paused' : 'status-active';
+        const statusLabel = g.status === 'paused' ? 'PAUSED' : 'ACTIVE';
+
+        html += '<div class="scorecard-goal-row">';
+        html += '<div class="scorecard-goal-dot ' + dotClass + '"></div>';
+        html += '<span class="scorecard-goal-name">' + escapeHtml(g.name) + '</span>';
+        html += '<span class="scorecard-goal-trend ' + trendClass + '">' + trendSymbol + '</span>';
+        html += '<span class="scorecard-goal-status ' + statusClass + '">' + statusLabel + '</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    // Rate of improvement
+    html += '<div class="scorecard-improvement">';
+    html += '<div class="scorecard-improvement-row">';
+    html += '<span class="scorecard-improvement-label">Getting better?</span>';
+    const improvingClass = sc.improving === 'yes' ? 'positive' : sc.improving === 'no' ? 'negative' : 'neutral';
+    html += '<span class="scorecard-improvement-value ' + improvingClass + '">' +
+            sc.improving.toUpperCase() + '</span>';
+    html += '</div>';
+
+    html += '<div class="scorecard-improvement-row">';
+    html += '<span class="scorecard-improvement-label">Speed</span>';
+    const speedClass = (sc.speed === 'accelerating' || sc.speed === 'steady') ? 'positive'
+      : sc.speed === 'stalled' ? 'negative' : 'neutral';
+    html += '<span class="scorecard-improvement-value ' + speedClass + '">' +
+            sc.speed.charAt(0).toUpperCase() + sc.speed.slice(1) + '</span>';
+    html += '</div>';
+
+    html += '<div class="scorecard-improvement-row">';
+    html += '<span class="scorecard-improvement-label">Growth</span>';
+    const growthClass = (sc.growthLabel === 'thriving' || sc.growthLabel === 'active') ? 'positive'
+      : sc.growthLabel === 'dormant' ? 'negative' : 'neutral';
+    html += '<span class="scorecard-improvement-value ' + growthClass + '">' +
+            sc.growthLabel.charAt(0).toUpperCase() + sc.growthLabel.slice(1) + '</span>';
+    html += '</div>';
+    html += '</div>';
+
+    // Owner attention needed
+    const attentionClass = sc.attention === 'no' ? 'no-action'
+      : sc.attention === 'yes' ? (sc.attentionUrgency === 'NOW' ? 'urgent' : 'action-needed')
+      : 'no-action';
+    html += '<div class="scorecard-attention ' + attentionClass + '">';
+    if (sc.attention === 'no') {
+      html += '<div class="scorecard-attention-title">Owner Action Needed: No</div>';
+      html += escapeHtml(sc.attentionText);
+    } else {
+      html += '<div class="scorecard-attention-title">Owner Action: ' +
+              escapeHtml(sc.attentionUrgency || 'CHECK') + '</div>';
+      html += escapeHtml(sc.attentionText);
+    }
+    html += '</div>';
+
+    html += '</div>';
+
+    container.innerHTML = html;
+  }
+
+  // ----------------------------------------------------------
+  // TASK 2: Enhanced Prediction Tracker
+  // ----------------------------------------------------------
+  function updatePredictionTracker() {
+    const container = document.getElementById('prediction-tracker-container');
+    if (!container) return;
+
+    if (state.predictions.length === 0) {
+      container.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">No prediction data available</div>';
+      return;
+    }
+
+    // Split predictions into pending (upcoming) and resolved
+    const pending = state.predictions.filter(p => p.outcome === 'pending');
+    const resolved = state.predictions.filter(p => p.outcome !== 'pending');
+
+    let html = '';
+
+    // Upcoming predictions section
+    if (pending.length > 0) {
+      html += '<div class="prediction-tracker-section">';
+      html += '<div class="prediction-section-title">Upcoming <span class="prediction-section-count">' + pending.length + '</span></div>';
+
+      pending.forEach(p => {
+        const confidence = p.confidence || 'medium';
+        const confClass = confidence === 'high' ? 'pending-high' : confidence === 'low' ? 'pending-low' : 'pending-med';
+        const confLabel = confidence === 'high' ? 'HIGH' : confidence === 'low' ? 'LOW' : 'MED';
+        const confWidth = confidence === 'high' ? '90' : confidence === 'low' ? '30' : '60';
+        const confFillClass = confidence === 'high' ? 'high' : confidence === 'low' ? 'low' : 'medium';
+
+        html += '<div class="prediction-enhanced-item">';
+        html += '<span class="prediction-badge ' + confClass + '">' + confLabel + '</span>';
+        html += '<div class="prediction-body">';
+        html += '<div class="prediction-body-text">' + escapeHtml(p.text || '') + '</div>';
+        html += '<div class="prediction-body-meta">';
+        if (p.date) {
+          // Show time until resolution
+          const resDate = new Date(p.date + 'T23:59:59');
+          const daysLeft = Math.max(0, Math.ceil((resDate - Date.now()) / 86400000));
+          html += '<span>' + (daysLeft <= 0 ? 'Due today' : 'Due in ' + daysLeft + 'd') + '</span>';
+        }
+        html += '<span class="prediction-confidence">';
+        html += '<span class="prediction-conf-bar"><span class="prediction-conf-fill ' + confFillClass + '" style="width:' + confWidth + '%"></span></span>';
+        html += '</span>';
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    // Resolved predictions section
+    if (resolved.length > 0) {
+      html += '<div class="prediction-tracker-section">';
+      html += '<div class="prediction-section-title">Resolved <span class="prediction-section-count">' + resolved.length + '</span></div>';
+
+      // Show most recent first
+      resolved.slice().reverse().forEach(p => {
+        const isHit = p.outcome === 'correct';
+        const badgeClass = isHit ? 'hit' : 'miss';
+        const badgeLabel = isHit ? 'HIT' : 'MISS';
+        const confidence = p.confidence || 'medium';
+        const confWidth = confidence === 'high' ? '90' : confidence === 'low' ? '30' : '60';
+        const confFillClass = confidence === 'high' ? 'high' : confidence === 'low' ? 'low' : 'medium';
+
+        html += '<div class="prediction-enhanced-item">';
+        html += '<span class="prediction-badge ' + badgeClass + '">' + badgeLabel + '</span>';
+        html += '<div class="prediction-body">';
+        html += '<div class="prediction-body-text">' + escapeHtml(p.text || '') + '</div>';
+        html += '<div class="prediction-body-meta">';
+        if (p.date) html += '<span>' + escapeHtml(p.date) + '</span>';
+        html += '<span class="prediction-confidence">';
+        html += '<span class="prediction-conf-bar"><span class="prediction-conf-fill ' + confFillClass + '" style="width:' + confWidth + '%"></span></span>';
+        html += '</span>';
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    container.innerHTML = html;
   }
 
   // ----------------------------------------------------------
@@ -6414,12 +6972,54 @@ svg#main-viz {
   let sseRetryMax = 30000;
   let eventSource = null;
 
+  // TASK 4: Connection health tracking state
+  let connDisconnectedAt = null;  // When disconnection started
+  let connRetryTimer = null;      // Interval for countdown display
+  let connRetryTarget = 0;        // When next retry will happen
+
+  function updateConnDetail() {
+    const connDetail = document.getElementById('conn-detail');
+    const connStatus = document.getElementById('connection-status');
+    if (!connDetail || !connStatus) return;
+
+    if (connDisconnectedAt === null) {
+      // Connected — clear any disconnection UI
+      connDetail.textContent = '';
+      connDetail.className = '';
+      connStatus.classList.remove('disconnected-banner');
+      return;
+    }
+
+    const elapsed = Date.now() - connDisconnectedAt;
+    const remaining = Math.max(0, Math.ceil((connRetryTarget - Date.now()) / 1000));
+
+    if (elapsed >= 60000) {
+      // Show disconnection duration after 1 minute
+      const minutes = Math.floor(elapsed / 60000);
+      connDetail.textContent = 'down ' + minutes + 'm';
+      connDetail.className = 'conn-duration-text';
+      connStatus.classList.add('disconnected-banner');
+    } else if (remaining > 0) {
+      connDetail.textContent = 'retry ' + remaining + 's';
+      connDetail.className = 'conn-retry-text';
+      connStatus.classList.remove('disconnected-banner');
+    } else {
+      connDetail.textContent = '';
+      connDetail.className = '';
+      connStatus.classList.remove('disconnected-banner');
+    }
+  }
+
   function connectSSE() {
     const connDot = document.getElementById('conn-dot');
     const connText = document.getElementById('conn-text');
 
     connDot.className = 'connecting';
     connText.textContent = 'connecting' + (API_BASE ? ` to ${API_BASE}` : '');
+
+    // Clear retry countdown on new attempt
+    if (connRetryTimer) { clearInterval(connRetryTimer); connRetryTimer = null; }
+    updateConnDetail();
 
     try {
       eventSource = new EventSource(API_BASE + '/api/stream');
@@ -6428,6 +7028,11 @@ svg#main-viz {
         sseRetryDelay = 1000;
         connDot.className = '';
         connText.textContent = 'connected';
+        // Clear disconnection tracking
+        connDisconnectedAt = null;
+        if (connRetryTimer) { clearInterval(connRetryTimer); connRetryTimer = null; }
+        updateConnDetail();
+
         if (!state.liveConnected) {
           state.liveConnected = false; // Wait for first agent_tree event before showing empty state
           state._sseConnected = true;
@@ -6445,9 +7050,22 @@ svg#main-viz {
       eventSource.onerror = () => {
         eventSource.close();
         connDot.className = 'disconnected';
-        connText.textContent = 'reconnecting';
+        connText.textContent = 'disconnected';
+
+        // Track disconnection start time
+        if (connDisconnectedAt === null) {
+          connDisconnectedAt = Date.now();
+        }
+
+        // Schedule retry with countdown
+        connRetryTarget = Date.now() + sseRetryDelay;
         setTimeout(connectSSE, sseRetryDelay);
         sseRetryDelay = Math.min(sseRetryDelay * 1.5, sseRetryMax);
+
+        // Start countdown interval for retry display
+        if (connRetryTimer) clearInterval(connRetryTimer);
+        connRetryTimer = setInterval(updateConnDetail, 1000);
+        updateConnDetail();
       };
 
       // SSE event handlers
@@ -7403,14 +8021,16 @@ Auth: tokens refreshed, no anomalies`;
     };
 
     state.predictions = [
-      { text: 'Blog post on AI applications will get 500+ views in first 24h', outcome: 'correct', date: '2026-02-12' },
-      { text: 'RSS parser implementation will take 2 cycles', outcome: 'correct', date: '2026-02-11' },
-      { text: 'Competitor analysis will reveal 3+ untapped niches', outcome: 'incorrect', date: '2026-02-11' },
-      { text: 'Content pipeline refactor will reduce processing time by 40%', outcome: 'correct', date: '2026-02-10' },
-      { text: 'Social media auto-posting will increase engagement by 25%', outcome: 'pending', date: '2026-02-12' },
-      { text: 'Infrastructure migration will complete without downtime', outcome: 'correct', date: '2026-02-09' },
-      { text: 'Vector embedding approach will outperform keyword search', outcome: 'pending', date: '2026-02-12' },
-      { text: 'A/B test on headlines will show >10% CTR improvement', outcome: 'incorrect', date: '2026-02-08' },
+      { text: 'Blog post on AI applications will get 500+ views in first 24h', outcome: 'correct', date: '2026-02-12', confidence: 'high' },
+      { text: 'RSS parser implementation will take 2 cycles', outcome: 'correct', date: '2026-02-11', confidence: 'high' },
+      { text: 'Competitor analysis will reveal 3+ untapped niches', outcome: 'incorrect', date: '2026-02-11', confidence: 'medium' },
+      { text: 'Content pipeline refactor will reduce processing time by 40%', outcome: 'correct', date: '2026-02-10', confidence: 'medium' },
+      { text: 'Social media auto-posting will increase engagement by 25%', outcome: 'pending', date: '2026-02-16', confidence: 'medium' },
+      { text: 'Infrastructure migration will complete without downtime', outcome: 'correct', date: '2026-02-09', confidence: 'high' },
+      { text: 'Vector embedding approach will outperform keyword search', outcome: 'pending', date: '2026-02-18', confidence: 'high' },
+      { text: 'A/B test on headlines will show >10% CTR improvement', outcome: 'incorrect', date: '2026-02-08', confidence: 'low' },
+      { text: 'Revenue will exceed $2,000 by end of February', outcome: 'pending', date: '2026-02-28', confidence: 'low' },
+      { text: 'Research Scout will find 5+ actionable insights this week', outcome: 'pending', date: '2026-02-14', confidence: 'medium' },
     ];
 
     // IMPROVEMENT 3: Seed demo token history (7 days)
